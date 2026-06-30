@@ -1,0 +1,12 @@
+[airtable]
+api_url = "https://api.airtable.com/v0"
+token_env = "AIRTABLE_TOKEN"
+base_id = "appXXXXXXXXXXXXXX"
+
+[airtable.tables.assets]
+table_id = "tblXXXXXXXXXXXXXX"
+primary_key_field = "Asset ID"
+
+[logging]
+level = "info"
+directory = "./logs"

@@ -1,0 +1,18 @@
+[package]
+name = "airtable-sync-cli"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository = "https://github.com/pacificnm/airtable-sync"
+description = "CLI for syncing data with Airtable"
+publish = false
+
+[[bin]]
+name = "airtable-sync"
+path = "src/main.rs"
+
+[dependencies]
+airtable-sync-core = { path = "../core" }
+nest-cli = { workspace = true, features = ["async"] }
+nest-logging = { workspace = true }

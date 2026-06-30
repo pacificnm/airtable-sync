@@ -1,0 +1,25 @@
+[package]
+name = "airtable-sync-core"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository = "https://github.com/pacificnm/airtable-sync"
+description = "Shared Airtable Sync application logic for CLI and GUI hosts"
+
+[dependencies]
+async-trait = "0.1"
+clap = { version = "4", features = ["derive"] }
+nest-airtable = { workspace = true }
+nest-cli = { workspace = true, features = ["async"] }
+nest-core = { workspace = true }
+nest-error = { workspace = true }
+nest-http-client = { workspace = true }
+nest-logging = { workspace = true }
+serde_json = "1"
+tracing = "0.1"
+
+[dev-dependencies]
+nest-config = { workspace = true }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+wiremock = "0.6"

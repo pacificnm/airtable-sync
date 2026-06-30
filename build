@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_ROOT="$(cd "$(dirname "$0")" && pwd)"
+export CARGO_TARGET_DIR="$APP_ROOT/target"
+
+cd "$APP_ROOT"
+
+cmd="${1:-build}"
+shift || true
+
+case "$cmd" in
+  build)
+    cargo build -p airtable-sync-cli "$@"
+    ;;
+  release)
+    cargo build -p airtable-sync-cli --release "$@"
+    ;;
+  run)
+    profile=debug
+    if [[ "${1:-}" == "--release" ]]; then
+      profile=release
+      shift
+    fi
+    bin="$APP_ROOT/target/$profile/airtable-sync"
+    if [[ ! -x "$bin" ]]; then
+      if [[ "$profile" == release ]]; then
+        cargo build -p airtable-sync-cli --release
+      else
+        cargo build -p airtable-sync-cli
+      fi
+    fi
+    config_args=()
+    if [[ -f "$APP_ROOT/config.toml" ]]; then
+      config_args=(--config "$APP_ROOT/config.toml")
+    fi
+    exec "$bin" "${config_args[@]}" "$@"
+    ;;
+  test)
+    cargo test -p airtable-sync-core -p airtable-sync-cli "$@"
+    ;;
+  *)
+    cargo "$cmd" -p airtable-sync-cli "$@"
+    ;;
+esac
