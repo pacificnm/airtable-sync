@@ -1,0 +1,9 @@
+# Use the enclosing Nest checkout when developing inside pacificnm/nest (apps/airtable-sync submodule).
+[patch."https://github.com/pacificnm/nest.git"]
+nest-airtable = { path = "../../modules/crates/nest-airtable" }
+nest-cli = { path = "../../core/crates/nest-cli" }
+nest-config = { path = "../../core/crates/nest-config" }
+nest-core = { path = "../../core/crates/nest-core" }
+nest-error = { path = "../../core/crates/nest-error" }
+nest-http-client = { path = "../../core/crates/nest-http-client" }
+nest-logging = { path = "../../core/crates/nest-logging" }
