@@ -4,7 +4,7 @@ Sync data between CSV sources and [Airtable](https://airtable.com), built on the
 
 This README is organized around the **user workflow** — from first-time setup through configuration, mapping, comparison, and synchronization. Commands are grouped by the step you are performing, not by implementation detail.
 
-> **Status:** The CLI specification below defines the product interface. Implementation is in progress; run `./build run -- --help` to see what is available in your build.
+> **Status:** Milestone 1 complete — full command tree and branded `--help`. **`config validate`** and **`config show`** are implemented; other commands are stubs.
 
 ---
 
@@ -164,30 +164,181 @@ Steps 1–5 are replaced by `airtable-sync setup init` on first run. Steps 6–9
 
 ## Configuration
 
-Copy `config.example.toml` to `config.toml` (or run `config init`). Set your Airtable base, table definitions, CSV paths, and database location.
+Copy `config.example.toml` to `config.toml` (or run `config init`). `config.toml` is gitignored — it holds environment-specific paths, table IDs, and secrets.
+
+Most commands load `config.toml` from the current directory automatically when present.
+
+### Sections overview
+
+| Section | Purpose |
+|---------|---------|
+| `[airtable]` | Airtable API connection (base URL, token, base ID) |
+| `[airtable.tables.<name>]` | One block per logical table — Airtable table ID and sync enablement |
+| `[sync]` | Global synchronization behavior (dry-run, parallelism, change plans) |
+| `[csv]` | Input CSV file paths for location and space data |
+| `[database]` | Local SQLite database path and schema script |
+| `[logging]` | Log level and output directory |
+
+### `[airtable]`
+
+| Key | Description |
+|-----|-------------|
+| `api_url` | Airtable REST API base URL (default `https://api.airtable.com/v0`) |
+| `token` | Personal access token stored directly in gitignored `config.toml` (preferred) |
+| `token_env` | Environment variable name for the token, or legacy direct token value in config |
+| `base_id` | Airtable base ID (`app…`) |
+
+### `[airtable.tables.<name>]`
+
+Define one section per table using a stable **logical name** (snake_case). Commands and mappings refer to this name, not the Airtable table title.
+
+| Key | Description |
+|-----|-------------|
+| `table_id` | Airtable table ID (`tbl…`) |
+| `sync` | When `true`, the table is included in `sync all` and bulk compare operations (default `false` if omitted) |
+| `primary_key_field` | Optional. Airtable field name used as the record key for compare/sync |
+
+Example — enable sync for a subset of tables:
+
+```toml
+[airtable.tables.building]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = true
+
+[airtable.tables.city]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = true
+
+[airtable.tables.department]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = false
+```
+
+### `[sync]`
+
+| Key | Description |
+|-----|-------------|
+| `dry_run` | When `true`, sync commands plan changes without writing to Airtable |
+| `continue_on_error` | When `true`, keep processing other tables/records after a non-fatal error |
+| `max_parallel_tables` | Maximum tables processed concurrently |
+| `max_parallel_updates` | Maximum concurrent update operations per table |
+| `create_change_plan` | When `true`, persist a change plan to SQLite before apply |
+
+### `[csv]`
+
+| Key | Description |
+|-----|-------------|
+| `location_data_file` | Path to the location CSV used for header import, mapping, and compare |
+| `space_data_file` | Path to the space CSV used for header import, mapping, and compare |
+
+### `[database]`
+
+| Key | Description |
+|-----|-------------|
+| `provider` | Database backend (`sqlite`) |
+| `database_path` | Path to the SQLite file (schema, mappings, sync history, change plans) |
+| `schema` | Path to the SQL schema file applied by `db init` / `db migrate` |
+
+### `[logging]`
+
+| Key | Description |
+|-----|-------------|
+| `level` | Log level (`trace`, `debug`, `info`, `warn`, `error`) |
+| `directory` | Directory for log files (e.g. `./logs`) |
+
+### Full example
 
 ```toml
 [airtable]
 api_url = "https://api.airtable.com/v0"
-token_env = "AIRTABLE_TOKEN"
+token = "pat..."
 base_id = "appXXXXXXXXXXXXXX"
 
-[airtable.tables.assets]
+[sync]
+dry_run = true
+continue_on_error = true
+max_parallel_tables = 2
+max_parallel_updates = 5
+create_change_plan = true
+
+[airtable.tables.building]
 table_id = "tblXXXXXXXXXXXXXX"
-primary_key_field = "Asset ID"
+sync = true
+
+[airtable.tables.city]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = true
+
+[airtable.tables.people]
+table_id = "tblXXXXXXXXXXXXXX"
+# sync omitted — treated as disabled
+
+[csv]
+location_data_file = "/path/to/location.csv"
+space_data_file = "/path/to/space.csv"
+
+[database]
+provider = "sqlite"
+database_path = "/path/to/airtable-sync.db"
+schema = "./schema/airtable-sync.sql"
 
 [logging]
 level = "info"
 directory = "./logs"
 ```
 
-`run` and most commands load `config.toml` from the current directory automatically when present.
+Set credentials in gitignored `config.toml` (`token` preferred) or export the env var named by `token_env`:
+
+```bash
+export AIRTABLE_TOKEN="pat..."   # when using token_env = "AIRTABLE_TOKEN"
+```
+
+---
+
+## Dependencies
+
+Airtable Sync is built on the Nest framework and uses the following core crates:
+
+| Crate | Purpose |
+|--------|---------|
+| **nest-core** | Core module system, dependency injection, application context, and shared services. |
+| **nest-cli** | Command-line host, command registration, argument parsing, and application startup. |
+| **nest-config** | Loads and validates `config.toml` application configuration. |
+| **nest-error** | Structured error handling and application-wide error reporting. |
+| **nest-logging** | Logging initialization, log configuration, and tracing integration. |
+| **nest-file** | Safe file operations including reading, writing, copying, moving, and path validation. |
+| **nest-file-csv** | CSV parsing, serialization, column mapping, and import/export utilities. |
+| **nest-http** | Shared HTTP contracts, request/response models, and common HTTP types. |
+| **nest-http-client** | HTTP client for communicating with external services, including Airtable. |
+| **nest-airtable** | Airtable API client, schema discovery, record operations, batching, and synchronization helpers. |
+| **nest-task** | Background task execution, progress reporting, cancellation, and async task management. |
+| **nest-validation** | Validation framework for configuration, CSV data, mappings, and synchronization rules. |
+
+### Additional libraries
+
+| Library | Purpose |
+|---------|---------|
+| **rusqlite** | Local SQLite database used to store Airtable schema, field mappings, application settings, sync history, and change plans. |
+| **serde** | Serialization and deserialization of configuration and application models. |
+| **toml** | Parsing and writing application configuration files. |
+| **tracing** | Structured instrumentation used throughout the application. |
 
 ---
 
 ## GUI (planned)
 
-The future desktop host will use the same setup pipeline: **First Run** invokes `setup init` under the hood, then exposes mapping, compare, and sync in the UI.
+The desktop host (`airtable-sync-gui`, via `nest-gui`) is a **front end only**. It does not implement sync, mapping, or database logic itself.
+
+**Rule:** the GUI runs the same commands as the CLI. Buttons, wizards, and progress views invoke the existing CLI command pipeline (e.g. `setup init`, `mapping auto`, `sync dry-run`) — typically through `airtable-sync-core` and `CliApp::try_run_with` with explicit args, not duplicate business code in the GUI crate.
+
+| Host | Role |
+|------|------|
+| **CLI** (`airtable-sync-cli`) | Primary execution surface — all behavior lives in command handlers in `airtable-sync-core`. |
+| **GUI** (planned) | Presents workflow UI; dispatches to the same commands the CLI exposes. |
+
+First Run in the GUI maps to `setup init`. Compare, mapping review, and sync approval map to the corresponding CLI groups documented above.
+
+See [docs/architecture.md](docs/architecture.md) for the host model.
 
 ---
 

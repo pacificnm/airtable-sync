@@ -4,6 +4,13 @@ nest-airtable = { path = "../../modules/crates/nest-airtable" }
 nest-cli = { path = "../../core/crates/nest-cli" }
 nest-config = { path = "../../core/crates/nest-config" }
 nest-core = { path = "../../core/crates/nest-core" }
+nest-data-sqlite = { path = "../../modules/crates/nest-data-sqlite" }
 nest-error = { path = "../../core/crates/nest-error" }
+nest-file = { path = "../../core/crates/nest-file" }
+nest-file-csv = { path = "../../core/crates/nest-file-csv" }
+nest-http = { path = "../../core/crates/nest-http" }
 nest-http-client = { path = "../../core/crates/nest-http-client" }
 nest-logging = { path = "../../core/crates/nest-logging" }
+nest-task = { path = "../../core/crates/nest-task" }
+nest-task-runtime = { path = "../../core/crates/nest-task-runtime" }
+nest-validation = { path = "../../core/crates/nest-validation" }
