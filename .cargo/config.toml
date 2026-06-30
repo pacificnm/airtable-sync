@@ -1,9 +1,9 @@
-# Patch Nest git deps to a sibling nest checkout (../nest) for local framework development.
+# Patch Nest git deps when this product is cloned under nest/apps/<product>/.
 [patch."https://github.com/pacificnm/nest.git"]
-nest-airtable = { path = "../nest/modules/crates/nest-airtable" }
-nest-cli = { path = "../nest/core/crates/nest-cli" }
-nest-config = { path = "../nest/core/crates/nest-config" }
-nest-core = { path = "../nest/core/crates/nest-core" }
-nest-error = { path = "../nest/core/crates/nest-error" }
-nest-http-client = { path = "../nest/core/crates/nest-http-client" }
-nest-logging = { path = "../nest/core/crates/nest-logging" }
+nest-airtable = { path = "../../modules/crates/nest-airtable" }
+nest-cli = { path = "../../core/crates/nest-cli" }
+nest-config = { path = "../../core/crates/nest-config" }
+nest-core = { path = "../../core/crates/nest-core" }
+nest-error = { path = "../../core/crates/nest-error" }
+nest-http-client = { path = "../../core/crates/nest-http-client" }
+nest-logging = { path = "../../core/crates/nest-logging" }
