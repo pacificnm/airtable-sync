@@ -8,11 +8,15 @@
 
 #![deny(missing_docs)]
 
+pub mod airtable;
 pub mod commands;
+pub mod compare;
 pub mod config;
+pub mod csv;
 pub mod db;
+pub mod mapping;
 
 mod app;
 
-pub use app::{cli_app, cli_help_text, group_help_text};
+pub use app::{cli_app, cli_app_with_version, cli_help_text, group_help_text, DEFAULT_VERSION};
 pub use commands::{CommandGroupSpec, SubcommandSpec, COMMAND_GROUPS};

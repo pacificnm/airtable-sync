@@ -10,6 +10,7 @@ use nest_validation::codes::NEST_VALIDATION_FAILED;
 use nest_validation::{ValidationError, ValidationIssue};
 
 use crate::config::{resolve_config_path, AppConfig};
+use crate::db::{open_database, SchemaStore};
 
 const LOG_LEVELS: &[&str] = &["trace", "debug", "info", "warn", "error"];
 
@@ -82,6 +83,7 @@ pub fn ensure_valid_config(ctx: &AppContext) -> NestResult<ValidatedConfig> {
 pub fn collect_validation_issues(config: &ConfigService, app: &AppConfig) -> Vec<ValidationIssue> {
     let mut issues = semantic_issues(app);
     issues.extend(path_issues(config, app));
+    issues.extend(schema_cache_issues(config, app));
     issues
 }
 
@@ -169,6 +171,39 @@ fn semantic_issues(app: &AppConfig) -> Vec<ValidationIssue> {
                 format!("table_id for \"{name}\" should start with \"tbl\""),
             ));
         }
+
+        let pk_field = format!("airtable.tables.{name}.primary_key_field");
+        let pk_missing = table
+            .primary_key_field
+            .as_deref()
+            .is_none_or(str::is_empty);
+        if table.sync && pk_missing {
+            issues.push(
+                ValidationIssue::field_error(
+                    pk_field,
+                    "config.airtable.tables.primary_key_field.required",
+                    format!(
+                        "primary_key_field is required for sync-enabled table \"{name}\""
+                    ),
+                )
+                .with_help(
+                    "Set primary_key_field to the Airtable field name used to match CSV rows.",
+                ),
+            );
+        } else if !table.sync && pk_missing {
+            issues.push(
+                ValidationIssue::field_warning(
+                    pk_field,
+                    "config.airtable.tables.primary_key_field.missing",
+                    format!(
+                        "primary_key_field is not set for table \"{name}\" (compare/sync will fail until configured)"
+                    ),
+                )
+                .with_help(
+                    "Set primary_key_field when you plan to compare or sync this table.",
+                ),
+            );
+        }
     }
 
     if app.sync.max_parallel_tables == 0 {
@@ -223,6 +258,129 @@ fn semantic_issues(app: &AppConfig) -> Vec<ValidationIssue> {
     }
 
     issues
+}
+
+fn schema_cache_issues(config: &ConfigService, app: &AppConfig) -> Vec<ValidationIssue> {
+    let database_path = resolve_config_path(config, &app.database.database_path);
+    if !database_path.is_file() {
+        return unverified_primary_key_warnings(
+            app,
+            "database file does not exist — run `db init` then `airtable pull-schema` to verify primary_key_field values",
+        );
+    }
+
+    let Ok(db) = open_database(&database_path) else {
+        return vec![ValidationIssue::field_warning(
+            "database.database_path",
+            "config.database.database_path.unreadable",
+            "could not open database to verify primary_key_field values against schema cache",
+        )
+        .with_help("Fix database permissions or run `db init`.")];
+    };
+
+    let store = SchemaStore::new(db);
+    let mut issues = Vec::new();
+
+    for (name, table) in &app.airtable.tables {
+        let Some(primary_key_field) = table
+            .primary_key_field
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+        else {
+            continue;
+        };
+
+        let pk_config_field = format!("airtable.tables.{name}.primary_key_field");
+        let fields = match store.list_fields(&table.table_id) {
+            Ok(fields) => fields,
+            Err(_) => {
+                issues.push(
+                    ValidationIssue::field_warning(
+                        pk_config_field.clone(),
+                        "config.airtable.tables.primary_key_field.unverified",
+                        format!(
+                            "could not read schema cache to verify primary_key_field for table \"{name}\""
+                        ),
+                    )
+                    .with_help("Run `airtable pull-schema` after fixing database issues."),
+                );
+                continue;
+            }
+        };
+
+        if fields.is_empty() {
+            issues.push(
+                ValidationIssue::field_warning(
+                    pk_config_field,
+                    "config.airtable.tables.primary_key_field.cache_missing",
+                    format!(
+                        "table \"{name}\" has no cached fields — cannot verify primary_key_field `{primary_key_field}`"
+                    ),
+                )
+                .with_help("Run `airtable pull-schema` to download table fields."),
+            );
+            continue;
+        }
+
+        if fields
+            .iter()
+            .any(|field| field.field_name == primary_key_field)
+        {
+            continue;
+        }
+
+        let field_names: Vec<_> = fields.iter().map(|field| field.field_name.as_str()).collect();
+        let key_fields: Vec<_> = fields
+            .iter()
+            .filter(|field| field.is_key)
+            .map(|field| field.field_name.as_str())
+            .collect();
+        let mut help = format!(
+            "Cached fields for `{name}`: {}. Run `airtable list-fields {name}` to inspect.",
+            field_names.join(", ")
+        );
+        if !key_fields.is_empty() {
+            help.push_str(&format!(
+                " Airtable primary field(s) in cache: {}.",
+                key_fields.join(", ")
+            ));
+        }
+
+        issues.push(
+            ValidationIssue::field_error(
+                pk_config_field,
+                "config.airtable.tables.primary_key_field.unknown",
+                format!(
+                    "primary_key_field `{primary_key_field}` not found in schema cache for table \"{name}\""
+                ),
+            )
+            .with_help(help),
+        );
+    }
+
+    issues
+}
+
+fn unverified_primary_key_warnings(app: &AppConfig, reason: &str) -> Vec<ValidationIssue> {
+    app.airtable
+        .tables
+        .iter()
+        .filter_map(|(name, table)| {
+            table
+                .primary_key_field
+                .as_deref()
+                .filter(|value| !value.is_empty())
+                .map(|primary_key_field| {
+                    ValidationIssue::field_warning(
+                        format!("airtable.tables.{name}.primary_key_field"),
+                        "config.airtable.tables.primary_key_field.unverified",
+                        format!(
+                            "cannot verify primary_key_field `{primary_key_field}` for table \"{name}\" ({reason})"
+                        ),
+                    )
+                })
+        })
+        .collect()
 }
 
 fn path_issues(config: &ConfigService, app: &AppConfig) -> Vec<ValidationIssue> {
@@ -329,6 +487,7 @@ mod tests {
         AppConfig {
             airtable: AirtableSection {
                 api_url: None,
+                meta_api_url: None,
                 token: Some("pat-test".to_string()),
                 token_env: None,
                 base_id: "appTEST".to_string(),
@@ -337,7 +496,7 @@ mod tests {
                     AirtableTableEntry {
                         table_id: "tblTEST".to_string(),
                         sync: true,
-                        primary_key_field: None,
+                        primary_key_field: Some("Name".to_string()),
                     },
                 )]),
             },
@@ -383,6 +542,41 @@ mod tests {
                 .field
                 .as_ref()
                 .is_some_and(|field| field.as_str() == "airtable.token")
+        }));
+    }
+
+    #[test]
+    fn semantic_validation_requires_primary_key_for_sync_enabled_tables() {
+        let mut app = sample_app();
+        app.airtable.tables.get_mut("assets").unwrap().primary_key_field = None;
+
+        let issues = semantic_issues(&app);
+        assert!(issues.iter().any(|issue| {
+            issue.is_blocking()
+                && issue
+                    .field
+                    .as_ref()
+                    .is_some_and(|field| field.as_str() == "airtable.tables.assets.primary_key_field")
+        }));
+    }
+
+    #[test]
+    fn semantic_validation_warns_when_primary_key_missing_on_non_sync_table() {
+        let mut app = sample_app();
+        app.airtable
+            .tables
+            .get_mut("assets")
+            .unwrap()
+            .sync = false;
+        app.airtable.tables.get_mut("assets").unwrap().primary_key_field = None;
+
+        let issues = semantic_issues(&app);
+        assert!(issues.iter().any(|issue| {
+            !issue.is_blocking()
+                && issue
+                    .field
+                    .as_ref()
+                    .is_some_and(|field| field.as_str() == "airtable.tables.assets.primary_key_field")
         }));
     }
 

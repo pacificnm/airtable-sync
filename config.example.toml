@@ -14,9 +14,12 @@ max_parallel_tables = 2
 max_parallel_updates = 5
 create_change_plan = true
 
+# Tables with sync = true require primary_key_field (Airtable field used to match CSV rows).
+
 [airtable.tables.business_unit]
 table_id = "tblXXXXXXXXXXXXXX"
 sync = true
+primary_key_field = "Business Unit ID"
 
 [airtable.tables.service_line]
 table_id = "tblXXXXXXXXXXXXXX"
@@ -37,6 +40,7 @@ sync = false
 [airtable.tables.building]
 table_id = "tblXXXXXXXXXXXXXX"
 sync = true
+primary_key_field = "Building ID"
 
 [airtable.tables.region]
 table_id = "tblXXXXXXXXXXXXXX"

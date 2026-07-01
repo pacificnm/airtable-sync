@@ -106,7 +106,7 @@ mod tests {
     use clap::{Arg, ArgAction, Command};
 
     fn init_matches(output: Option<&str>, force: bool) -> ArgMatches {
-        let mut cmd = Command::new("init")
+        let cmd = Command::new("init")
             .arg(
                 Arg::new("force")
                     .long("force")

@@ -32,6 +32,7 @@ base_id = "appTEST"
 [airtable.tables.assets]
 table_id = "tblTEST"
 sync = true
+primary_key_field = "Name"
 
 [sync]
 dry_run = true

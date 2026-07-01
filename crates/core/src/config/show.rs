@@ -301,6 +301,7 @@ mod tests {
         AppConfig {
             airtable: AirtableSection {
                 api_url: Some("https://api.airtable.com/v0".to_string()),
+                meta_api_url: None,
                 token: Some("pat-secret-token".to_string()),
                 token_env: None,
                 base_id: "appTEST".to_string(),
@@ -309,7 +310,7 @@ mod tests {
                     AirtableTableEntry {
                         table_id: "tblTEST".to_string(),
                         sync: true,
-                        primary_key_field: None,
+                        primary_key_field: Some("Name".to_string()),
                     },
                 )]),
             },

@@ -8,6 +8,8 @@ use tempfile::tempdir;
 
 static TEST_LOCK: Mutex<()> = Mutex::new(());
 
+const SCHEMA_SQL: &str = include_str!("../../../schema/airtable-sync.sql");
+
 fn test_lock() -> std::sync::MutexGuard<'static, ()> {
     TEST_LOCK
         .lock()
@@ -19,7 +21,7 @@ fn write_valid_fixture(dir: &tempfile::TempDir) -> std::path::PathBuf {
     fs::create_dir_all(dir.path().join("logs")).unwrap();
     fs::write(dir.path().join("location.csv"), "id\n1\n").unwrap();
     fs::write(dir.path().join("space.csv"), "id\n1\n").unwrap();
-    fs::write(dir.path().join("schema.sql"), "-- schema\n").unwrap();
+    fs::write(dir.path().join("schema.sql"), SCHEMA_SQL).unwrap();
 
     let config_path = dir.path().join("config.toml");
     fs::write(
@@ -32,6 +34,7 @@ base_id = "appTEST"
 [airtable.tables.assets]
 table_id = "tblTEST"
 sync = true
+primary_key_field = "Name"
 
 [sync]
 dry_run = true
@@ -82,7 +85,7 @@ fn validate_fails_when_csv_section_missing() {
     let dir = tempdir().unwrap();
     fs::create_dir_all(dir.path().join("data")).unwrap();
     fs::create_dir_all(dir.path().join("logs")).unwrap();
-    fs::write(dir.path().join("schema.sql"), "-- schema\n").unwrap();
+    fs::write(dir.path().join("schema.sql"), SCHEMA_SQL).unwrap();
 
     let config_path = dir.path().join("config.toml");
     fs::write(
@@ -95,6 +98,7 @@ base_id = "appTEST"
 [airtable.tables.assets]
 table_id = "tblTEST"
 sync = true
+primary_key_field = "Name"
 
 [sync]
 dry_run = true
@@ -173,6 +177,82 @@ fn validate_fails_when_csv_file_missing() {
         .unwrap_err();
 
     assert_eq!(error.kind(), nest_error::NestErrorKind::Validation);
+}
+
+#[test]
+fn validate_fails_when_sync_enabled_table_missing_primary_key_field() {
+    let _lock = test_lock();
+    let dir = tempdir().unwrap();
+    let config_path = write_valid_fixture(&dir);
+    let content = fs::read_to_string(&config_path).unwrap();
+    let content = content.replace("primary_key_field = \"Name\"\n", "");
+    fs::write(&config_path, content).unwrap();
+
+    let error = cli_app()
+        .try_run_with([
+            "airtable-sync",
+            "--config",
+            config_path.to_str().unwrap(),
+            "config",
+            "validate",
+        ])
+        .unwrap_err();
+
+    assert_eq!(error.kind(), nest_error::NestErrorKind::Validation);
+    assert!(error.to_string().contains("primary_key_field"));
+}
+
+#[test]
+fn validate_fails_when_primary_key_field_not_in_schema_cache() {
+    let _lock = test_lock();
+    let dir = tempdir().unwrap();
+    let config_path = write_valid_fixture(&dir);
+
+    cli_app()
+        .try_run_with([
+            "airtable-sync",
+            "--config",
+            config_path.to_str().unwrap(),
+            "db",
+            "init",
+        ])
+        .unwrap();
+
+    let db_path = dir.path().join("data/app.db");
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    conn.execute(
+        "INSERT INTO airtable_tables (name, table_id, enabled, allow_create, allow_update)
+         VALUES ('assets', 'tblTEST', 1, 0, 1)",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO airtable_fields (table_id, field_id, field_name, field_type, is_computed, is_key)
+         VALUES ('tblTEST', 'fldNAME', 'Name', 'singleLineText', 0, 1)",
+        [],
+    )
+    .unwrap();
+
+    let content = fs::read_to_string(&config_path).unwrap();
+    let content = content.replace(
+        "primary_key_field = \"Name\"",
+        "primary_key_field = \"Building ID\"",
+    );
+    fs::write(&config_path, content).unwrap();
+
+    let error = cli_app()
+        .try_run_with([
+            "airtable-sync",
+            "--config",
+            config_path.to_str().unwrap(),
+            "config",
+            "validate",
+        ])
+        .unwrap_err();
+
+    assert_eq!(error.kind(), nest_error::NestErrorKind::Validation);
+    assert!(error.to_string().contains("Building ID"));
+    assert!(error.to_string().contains("not found in schema cache"));
 }
 
 #[test]

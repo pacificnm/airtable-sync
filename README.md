@@ -4,7 +4,7 @@ Sync data between CSV sources and [Airtable](https://airtable.com), built on the
 
 This README is organized around the **user workflow** — from first-time setup through configuration, mapping, comparison, and synchronization. Commands are grouped by the step you are performing, not by implementation detail.
 
-> **Status:** Milestone 1 complete — full command tree and branded `--help`. **`config validate`**, **`config show`**, **`config init`**, **`db init`**, **`db reset`**, **`db schema`**, and **`db migrate`** are implemented; other commands are stubs.
+> **Status:** Milestone 1 complete — full command tree and branded `--help`. **`config validate`**, **`config show`**, **`config init`**, **`db init`**, **`db reset`**, **`db schema`**, **`db migrate`**, **`airtable test`**, **`airtable pull-schema`**, **`airtable list-tables`**, **`airtable list-fields`**, **`csv import-headers`**, **`csv preview`**, **`csv validate`**, **`mapping list`**, **`mapping set`**, **`mapping remove`**, **`mapping enable`**, **`mapping disable`**, **`mapping report`**, **`compare table`**, and **`version`** are implemented; other commands are stubs.
 
 ---
 
@@ -90,6 +90,16 @@ Steps 1–5 are replaced by `airtable-sync setup init` on first run. Steps 6–9
 | `config show` | Display the loaded configuration |
 | `config init` | Create a default `config.toml` |
 
+#### `config validate`
+
+Checks TOML structure, paths, tokens, and table settings. When the SQLite database exists and `airtable pull-schema` has been run, it also verifies each configured `primary_key_field` against the cached Airtable field names (fails if the name does not match any field on that table).
+
+```bash
+airtable-sync config validate
+```
+
+If validation reports an unknown `primary_key_field`, run `airtable list-fields <table>` and use the exact Airtable field name from the cache.
+
 ### Database
 
 | Command | Description |
@@ -154,7 +164,52 @@ When developing locally with `./build run`, rebuild after code changes so you ar
 ./build run -- db init
 ./build run -- db reset --yes
 ./build run -- db migrate
+./build run -- airtable test
 ```
+
+#### `airtable test`
+
+Validates `config.toml`, then probes Airtable by listing one record page (`pageSize=1`) from the first sync-enabled table (or the first configured table if none are marked `sync = true`). Uses `nest-http-client` and `nest-airtable` under the hood.
+
+```bash
+airtable-sync airtable test
+airtable-sync airtable test --json
+```
+
+#### `airtable pull-schema`
+
+Downloads table and field metadata from the Airtable **Meta API** into SQLite (`airtable_tables`, `airtable_fields`). Requires PAT scope **`schema.bases:read`**. Pulls **all configured tables** from `config.toml` (not only `sync = true`).
+
+- **Upsert only** — re-pull updates schema metadata; does not delete stale field rows (mapping columns `sync_enabled` and `csv_field` are preserved).
+- **Permissive on pull** — missing tables or empty field lists produce warnings, not hard failures.
+- **Strict validation** applies when pushing updates to Airtable (compare/sync commands — future milestone).
+
+```bash
+airtable-sync airtable pull-schema
+airtable-sync --json airtable pull-schema
+```
+
+#### `airtable list-tables`
+
+Lists tables cached in SQLite by a prior `airtable pull-schema` run. Read-only — no Airtable API calls.
+
+```bash
+airtable-sync airtable list-tables
+airtable-sync --json airtable list-tables
+```
+
+If the cache is empty, the command succeeds and suggests running `airtable pull-schema` first.
+
+#### `airtable list-fields`
+
+Lists fields cached in SQLite for one table by logical name (from config / `list-tables`). Read-only — no Airtable API calls. Requires a prior `airtable pull-schema`.
+
+```bash
+airtable-sync airtable list-fields assets
+airtable-sync --json airtable list-fields assets
+```
+
+If the table is unknown or not cached, the command fails with a hint to run `pull-schema` or `list-tables`.
 
 ### Airtable
 
@@ -173,6 +228,38 @@ When developing locally with `./build run`, rebuild after code changes so you ar
 | `csv preview` | Preview CSV records |
 | `csv validate` | Validate CSV structure |
 
+#### `csv import-headers`
+
+Reads column headers from `[csv].location_data_file` and `[csv].space_data_file` into SQLite `csv_fields`, one row per column per file (`filename` stores the CSV basename). Replaces the previous import on each run. Requires `db init` first.
+
+```bash
+airtable-sync csv import-headers
+airtable-sync --json csv import-headers
+```
+
+#### `csv preview`
+
+Read-only preview of sample data rows from one configured CSV file. Requires `location` or `space` as the file argument. No database access.
+
+```bash
+airtable-sync csv preview location
+airtable-sync csv preview space --limit 10
+airtable-sync --json csv preview location
+```
+
+#### `csv validate`
+
+Read-only structural validation of configured CSV file(s). Scans headers and every data row. **No database access.**
+
+Validates **both** `location` and `space` files when no file argument is given. Warnings (empty or duplicate headers) are printed but do not fail the command. Errors (parse failure, ragged rows) fail with exit code non-zero.
+
+```bash
+airtable-sync csv validate
+airtable-sync csv validate location
+airtable-sync csv validate space
+airtable-sync --json csv validate
+```
+
 ### Mapping
 
 | Command | Description |
@@ -185,11 +272,91 @@ When developing locally with `./build run`, rebuild after code changes so you ar
 | `mapping disable` | Disable field synchronization |
 | `mapping report` | Generate mapping report |
 
-### Compare
+#### `mapping list`
+
+Lists all non-computed Airtable fields for one table with mapping columns (`csv_field`, `csv_file`, `sync_enabled`). Read-only — requires a prior `airtable pull-schema`.
+
+```bash
+airtable-sync mapping list building
+airtable-sync --json mapping list assets
+```
+
+#### `mapping set`
+
+Creates or updates a single field mapping in SQLite (`csv_field`, `csv_filename`, optional `sync_enabled`). Requires prior `airtable pull-schema` and `csv import-headers`. The same CSV column can map to fields in multiple Airtable tables — each field stores its own `csv_file` source.
+
+```bash
+airtable-sync mapping set building Name name
+airtable-sync mapping set space Area area --csv-file space
+airtable-sync mapping set building Status status --enable
+airtable-sync --json mapping set assets Name name
+```
+
+| Argument / flag | Description |
+|-----------------|-------------|
+| `TABLE` | Logical table name from config |
+| `FIELD` | Airtable field name (as in schema cache) |
+| `CSV_COLUMN` | CSV header or column to map (normalized on store) |
+| `--csv-file location\|space` | Required when the same normalized column exists in both CSV files; stored as `csv_filename` |
+| `--enable` | Set `sync_enabled = true` (preserves existing value when omitted) |
+| `--disable` | Set `sync_enabled = false` (preserves existing value when omitted) |
+
+`--enable` and `--disable` are mutually exclusive. When neither flag is passed, `sync_enabled` is left unchanged.
+
+#### `mapping remove`
+
+Clears `csv_field`, `csv_filename`, and `sync_enabled` for one non-computed field. Requires prior `airtable pull-schema`. Succeeds when the field has no mapping (`removed: false` in JSON).
+
+```bash
+airtable-sync mapping remove building Name
+airtable-sync --json mapping remove assets Name
+```
+
+#### `mapping enable`
+
+Sets `sync_enabled = true` for one mapped field without changing `csv_field` or `csv_filename`. Requires a prior CSV mapping (`mapping set`). Fails if the field has no mapping.
+
+```bash
+airtable-sync mapping enable building Name
+airtable-sync --json mapping enable assets Name
+```
+
+#### `mapping disable`
+
+Sets `sync_enabled = false` for one mapped field without changing `csv_field` or `csv_filename`. Requires a prior CSV mapping (`mapping set`).
+
+```bash
+airtable-sync mapping disable building Name
+airtable-sync --json mapping disable assets Name
+```
+
+#### `mapping report`
+
+Read-only mapping summary across **all cached tables**. Reports per-table and overall counts (mapped, unmapped, sync enabled, mapped but sync disabled) and lists unmapped field names. Requires prior `airtable pull-schema`.
+
+```bash
+airtable-sync mapping report
+airtable-sync --json mapping report
+```
+
+Use `mapping list <table>` for full field-level detail on one table.
+
+#### `compare table`
+
+Compares one configured table's CSV rows against live Airtable records. Rows are matched by `primary_key_field` from config; that field must be mapped to a CSV column. Only **sync-enabled** mapped fields from the same CSV file as the primary key are compared.
+
+Requires prior `airtable pull-schema`, `csv import-headers`, and field mappings (`mapping set` + `mapping enable`).
+
+```bash
+airtable-sync compare table building
+airtable-sync --json compare table city
+```
+
+Reports summary counts (matched, differing, CSV-only, Airtable-only) and lists field-level differences.
 
 | Command | Description |
 |---------|-------------|
-| `compare table` | Compare one table |
+| `compare table` | Compare one table (implemented) |
 | `compare all` | Compare every configured table |
 
 ### Sync
@@ -253,7 +420,7 @@ Define one section per table using a stable **logical name** (snake_case). Comma
 |-----|-------------|
 | `table_id` | Airtable table ID (`tbl…`) |
 | `sync` | When `true`, the table is included in `sync all` and bulk compare operations (default `false` if omitted) |
-| `primary_key_field` | Optional. Airtable field name used as the record key for compare/sync |
+| `primary_key_field` | Airtable field name used as the record key for compare/sync. **Required** when `sync = true` |
 
 Example — enable sync for a subset of tables:
 
@@ -261,10 +428,12 @@ Example — enable sync for a subset of tables:
 [airtable.tables.building]
 table_id = "tblXXXXXXXXXXXXXX"
 sync = true
+primary_key_field = "Building ID"
 
 [airtable.tables.city]
 table_id = "tblXXXXXXXXXXXXXX"
 sync = true
+primary_key_field = "City ID"
 
 [airtable.tables.department]
 table_id = "tblXXXXXXXXXXXXXX"
@@ -321,10 +490,12 @@ create_change_plan = true
 [airtable.tables.building]
 table_id = "tblXXXXXXXXXXXXXX"
 sync = true
+primary_key_field = "Building ID"
 
 [airtable.tables.city]
 table_id = "tblXXXXXXXXXXXXXX"
 sync = true
+primary_key_field = "City ID"
 
 [airtable.tables.people]
 table_id = "tblXXXXXXXXXXXXXX"
@@ -349,6 +520,8 @@ Set credentials in gitignored `config.toml` (`token` preferred) or export the en
 ```bash
 export AIRTABLE_TOKEN="pat..."   # when using token_env = "AIRTABLE_TOKEN"
 ```
+
+The token needs **`data.records:read`** (and update scopes for sync) plus **`schema.bases:read`** for `airtable pull-schema`.
 
 ---
 

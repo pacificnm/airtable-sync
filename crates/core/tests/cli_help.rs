@@ -76,10 +76,18 @@ fn nested_help_flag_returns_ok() {
 }
 
 #[test]
-fn version_stub_runs() {
+fn version_command_prints_configured_version() {
     let _lock = test_lock();
     cli_app()
         .try_run_with(["airtable-sync", "version"])
+        .unwrap();
+}
+
+#[test]
+fn version_flag_prints_configured_version() {
+    let _lock = test_lock();
+    cli_app()
+        .try_run_with(["airtable-sync", "--version"])
         .unwrap();
 }
 

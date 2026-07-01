@@ -6,10 +6,21 @@ use crate::commands::register_commands;
 
 const LONG_ABOUT: &str = "Airtable Sync\n\nSynchronize Airtable tables from LDP CSV exports.";
 
-/// Builds the Airtable Sync CLI host with Milestone 1 placeholder command groups.
+/// Default crate version from `airtable-sync-core` (used by tests).
+pub const DEFAULT_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Builds the Airtable Sync CLI host with the default core crate version.
 pub fn cli_app() -> CliApp {
+    cli_app_with_version(DEFAULT_VERSION)
+}
+
+/// Builds the Airtable Sync CLI host with an explicit application version.
+///
+/// Pass `env!("CARGO_PKG_VERSION")` from the binary crate to pin the shipped CLI version.
+pub fn cli_app_with_version(version: &'static str) -> CliApp {
     register_commands(
         CliApp::new("airtable-sync")
+            .with_version(version)
             .with_long_about(LONG_ABOUT)
             .with_logging(LoggingConfig::for_cli("airtable-sync"))
             .with_log_level_from_args(true),

@@ -17,11 +17,14 @@ CREATE TABLE airtable_fields (
   is_key BOOLEAN NOT NULL DEFAULT 0,
   sync_enabled BOOLEAN NOT NULL DEFAULT 0,
   csv_field TEXT,
+  csv_filename TEXT,
   UNIQUE(table_id, field_name)
 );
 
 CREATE TABLE csv_fields (
   id INTEGER PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
-  normalized_name TEXT NOT NULL
+  filename TEXT NOT NULL,
+  name TEXT NOT NULL,
+  normalized_name TEXT NOT NULL,
+  UNIQUE(filename, normalized_name)
 );

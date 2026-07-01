@@ -34,6 +34,9 @@ pub struct AirtableSection {
     /// Airtable REST API base URL.
     #[serde(default)]
     pub api_url: Option<String>,
+    /// Airtable Meta API base URL (default derived by nest-airtable if omitted).
+    #[serde(default)]
+    pub meta_api_url: Option<String>,
     /// Personal access token stored directly in gitignored `config.toml`.
     #[serde(default)]
     pub token: Option<String>,
