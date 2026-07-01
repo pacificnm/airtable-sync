@@ -1,5 +1,6 @@
 //! SQLite database management commands.
 
+mod change_plan_store;
 mod common;
 mod csv_store;
 mod init;
@@ -18,7 +19,15 @@ pub use schema_store::{
     FieldMappingRow, FieldMappingUpdate, SchemaPullStats, SchemaStore,
 };
 
+pub use change_plan_store::{
+    ensure_change_plan_schema, ChangePlanDetail, ChangePlanFieldChange, ChangePlanHeader,
+    ChangePlanOperation, ChangePlanOperationView, ChangePlanStatusCounts, ChangePlanStore,
+    OPERATION_STATUS_APPROVED, OPERATION_STATUS_DENIED, OPERATION_STATUS_FAILED,
+    OPERATION_STATUS_PENDING, OPERATION_STATUS_APPLIED, PLAN_STATUS_APPLIED, PLAN_STATUS_DRAFT,
+    PLAN_STATUS_SUPERSEDED,
+};
 pub use common::{
-    apply_pending_migrations, open_database, registered_migrations, DbMigrateResult, MIGRATION_ID,
+    apply_pending_migrations, open_database, registered_migrations, DbMigrateResult,
+    CHANGE_PLANS_MIGRATION_ID, MIGRATION_ID,
 };
 pub(crate) use common::absolute_path;

@@ -188,6 +188,9 @@ fn reset_recreates_existing_database() {
             "_nest_migrations".to_string(),
             "airtable_fields".to_string(),
             "airtable_tables".to_string(),
+            "change_plan_field_changes".to_string(),
+            "change_plan_operations".to_string(),
+            "change_plans".to_string(),
             "csv_fields".to_string(),
         ]
     );
@@ -221,6 +224,9 @@ fn reset_creates_database_when_missing() {
             "_nest_migrations".to_string(),
             "airtable_fields".to_string(),
             "airtable_tables".to_string(),
+            "change_plan_field_changes".to_string(),
+            "change_plan_operations".to_string(),
+            "change_plans".to_string(),
             "csv_fields".to_string(),
         ]
     );

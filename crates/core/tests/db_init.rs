@@ -133,6 +133,9 @@ fn init_creates_database_and_applies_schema() {
             "_nest_migrations".to_string(),
             "airtable_fields".to_string(),
             "airtable_tables".to_string(),
+            "change_plan_field_changes".to_string(),
+            "change_plan_operations".to_string(),
+            "change_plans".to_string(),
             "csv_fields".to_string(),
         ]
     );

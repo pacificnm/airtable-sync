@@ -4,7 +4,7 @@ Sync data between CSV sources and [Airtable](https://airtable.com), built on the
 
 This README is organized around the **user workflow** — from first-time setup through configuration, mapping, comparison, and synchronization. Commands are grouped by the step you are performing, not by implementation detail.
 
-> **Status:** Milestone 1 complete — full command tree and branded `--help`. **`config validate`**, **`config show`**, **`config init`**, **`db init`**, **`db reset`**, **`db schema`**, **`db migrate`**, **`airtable test`**, **`airtable pull-schema`**, **`airtable list-tables`**, **`airtable list-fields`**, **`csv import-headers`**, **`csv preview`**, **`csv validate`**, **`mapping list`**, **`mapping set`**, **`mapping remove`**, **`mapping enable`**, **`mapping disable`**, **`mapping report`**, **`compare table`**, and **`version`** are implemented; other commands are stubs.
+> **Status:** Milestone 1 complete — full command tree and branded `--help`. **`config validate`**, **`config show`**, **`config init`**, **`db init`**, **`db reset`**, **`db schema`**, **`db migrate`**, **`airtable test`**, **`airtable pull-schema`**, **`airtable list-tables`**, **`airtable list-fields`**, **`csv import-headers`**, **`csv preview`**, **`csv validate`**, **`mapping list`**, **`mapping set`**, **`mapping remove`**, **`mapping enable`**, **`mapping disable`**, **`mapping report`**, **`compare table`**, **`compare all`**, **`sync dry-run`**, **`sync review`**, **`sync approve`**, **`sync deny`**, **`sync approve-all`**, **`sync deny-all`**, **`sync apply`**, **`report changes`**, **`report validation`**, **`report summary`**, and **`version`** are implemented; other commands are stubs.
 
 ---
 
@@ -66,11 +66,16 @@ airtable-sync compare all
 # 8. Generate change plan
 airtable-sync sync dry-run
 
-# 9. Apply updates
+# 9. Review and approve changes
+airtable-sync sync review
+airtable-sync sync approve-all   # or approve/deny individually
+
+# 10. Apply updates
+# Set dry_run = false in config.toml first, then:
 airtable-sync sync apply
 ```
 
-Steps 1–5 are replaced by `airtable-sync setup init` on first run. Steps 6–9 are the repeat cycle before each sync.
+Steps 1–5 are replaced by `airtable-sync setup init` on first run. Steps 6–10 are the repeat cycle before each sync.
 
 ---
 
@@ -122,7 +127,7 @@ airtable-sync db schema --json
 
 #### `db migrate`
 
-Applies pending migrations from the product registry (currently `001_initial_schema` from `[database].schema`). Safe to re-run — no-op when already up to date. Does **not** delete data (unlike `db reset`).
+Applies pending migrations from the product registry (`001_initial_schema` from `[database].schema`, plus bundled migrations such as `002_change_plans`). Safe to re-run — no-op when already up to date. Does **not** delete data (unlike `db reset`).
 
 If the database file does not exist, `db migrate` creates it and applies all migrations (similar to `db init`, but `db init` fails when the file already exists).
 
@@ -135,7 +140,7 @@ Use `db init` for an explicit first-time create, or `db migrate` for upgrades an
 
 #### `db init` vs `db reset`
 
-Both commands validate config, apply the schema from `[database].schema`, and record migration `001_initial_schema`. Use one or the other — not both in sequence.
+Both commands validate config, apply migrations from the product registry (`001_initial_schema` from `[database].schema`, plus bundled migrations such as `002_change_plans`), and record applied migration ids. Use one or the other — not both in sequence.
 
 | Situation | Command |
 |-----------|---------|
@@ -354,17 +359,94 @@ airtable-sync --json compare table city
 
 Reports summary counts (matched, differing, CSV-only, Airtable-only) and lists field-level differences.
 
+#### `compare all`
+
+Compares all tables with **`sync = true`** in config, using the same logic as `compare table` for each table. Tables are processed in alphabetical order. Per-table failures are collected when `[sync].continue_on_error = true`; otherwise the command stops at the first error.
+
+Requires the same prerequisites as `compare table`.
+
+```bash
+airtable-sync compare all
+airtable-sync --json compare all
+```
+
+Human output shows a rollup summary plus one line per table. JSON output includes per-table results and any failures.
+
 | Command | Description |
 |---------|-------------|
 | `compare table` | Compare one table (implemented) |
-| `compare all` | Compare every configured table |
+| `compare all` | Compare all sync-enabled tables (implemented) |
 
 ### Sync
 
+#### `sync dry-run`
+
+Generates an **update-only** change plan for all tables with **`sync = true`** in config. Compares CSV to live Airtable (same engine as `compare all`), then plans field patches for differing records. No Airtable writes are performed.
+
+Requires the same prerequisites as `compare table`. When `[sync].create_change_plan = true` (default), the plan is persisted to SQLite — run `db migrate` on existing databases to apply migration `002_change_plans` before the first dry-run.
+
+```bash
+airtable-sync sync dry-run
+airtable-sync --json sync dry-run
+```
+
+Respects `[sync].continue_on_error` for per-table failures. Updates are skipped when the cached table has `allow_update = false`.
+
+#### `sync review`
+
+Shows the active change plan (latest `draft` plan for the configured base, or `--plan-id`). Lists each operation with its database id, table, primary key, field diffs, and review status (`pending`, `approved`, `denied`).
+
+Requires `[sync].create_change_plan = true` and a prior `sync dry-run`.
+
+```bash
+airtable-sync sync review
+airtable-sync --json sync review
+airtable-sync sync review --plan-id 3
+```
+
+#### `sync approve` / `sync deny`
+
+Approve or deny one pending operation by id from `sync review`, or by `--table` and `--key`:
+
+```bash
+airtable-sync sync approve 12
+airtable-sync sync approve --table assets --key 2
+airtable-sync sync deny 15
+```
+
+Denied operations cannot be re-approved — run `sync dry-run` again to create a new plan.
+
+#### `sync approve-all` / `sync deny-all`
+
+Bulk-approve or bulk-deny all `pending` operations in the active plan:
+
+```bash
+airtable-sync sync approve-all
+airtable-sync sync deny-all
+```
+
+#### `sync apply`
+
+Push approved updates to Airtable. Requires `[sync].dry_run = false` and `[sync].create_change_plan = true`.
+
+```bash
+# After review/approval, set dry_run = false in config.toml, then:
+airtable-sync sync apply
+airtable-sync --json sync apply
+airtable-sync sync apply --plan-id 3
+```
+
+Only operations with status `approved` are pushed. Successful operations become `applied`; failures become `failed` (when `continue_on_error = true`, other approved operations still run). When no `pending` or `approved` operations remain, the plan is marked `applied`.
+
 | Command | Description |
 |---------|-------------|
-| `sync dry-run` | Generate update plan only (no writes) |
-| `sync apply` | Apply approved updates |
+| `sync dry-run` | Generate update plan only (implemented) |
+| `sync review` | Review the active change plan (implemented) |
+| `sync approve` | Approve one pending change (implemented) |
+| `sync deny` | Deny one pending change (implemented) |
+| `sync approve-all` | Approve all pending changes (implemented) |
+| `sync deny-all` | Deny all pending changes (implemented) |
+| `sync apply` | Apply approved updates (implemented) |
 | `sync table` | Synchronize a single table |
 | `sync all` | Synchronize all enabled tables |
 
@@ -372,9 +454,59 @@ Reports summary counts (matched, differing, CSV-only, Airtable-only) and lists f
 
 | Command | Description |
 |---------|-------------|
-| `report changes` | Generate change report |
-| `report validation` | Validation report |
-| `report summary` | Overall sync summary |
+| `report changes` | Generate change report (implemented) |
+| `report validation` | Pre-sync validation report (implemented) |
+| `dry-run` | Overall sync summary (implemented) |
+
+#### `report changes`
+
+Summarize a persisted change plan from `sync dry-run`, grouped by table. Useful for audit logs and sharing what would change (or what changed after apply).
+
+Requires `[sync].create_change_plan = true`.
+
+```bash
+airtable-sync report changes
+airtable-sync --json report changes
+airtable-sync report changes --plan-id 3
+airtable-sync report changes --status approved
+```
+
+Defaults to the latest draft plan; if none exists, uses the most recent plan (e.g. after apply). Operation counts include `pending`, `approved`, `denied`, `applied`, and `failed`.
+
+#### `report validation`
+
+End-to-end pre-sync readiness report. Runs configuration, CSV, database cache, and mapping checks in one pass without stopping at the first failure.
+
+```bash
+airtable-sync report validation
+airtable-sync --json report validation
+```
+
+| Section | Checks |
+|---------|--------|
+| Config | Same rules as `config validate` (paths, token, table ids, primary keys) |
+| CSV | Structural validation of both configured CSV files (`csv validate`) |
+| Database | Schema cache populated (`airtable pull-schema`), CSV headers imported (`csv import-headers`) |
+| Mappings | Sync-enabled tables have a mapped, sync-enabled primary key; unmapped fields are warnings |
+
+Exits with an error when any blocking issue is found. Warnings are printed but do not fail the report.
+
+#### `report summary`
+
+Read-only dashboard of local sync state. Aggregates config settings, SQLite cache counts, mapping rollup, CSV row counts, and the latest change plan — **no Airtable API calls**. Always succeeds when config is valid (unlike `report validation`).
+
+```bash
+airtable-sync report summary
+airtable-sync --json report summary
+```
+
+| Section | Source |
+|---------|--------|
+| Sync settings | `dry_run`, table counts from config |
+| Cache | Schema tables/fields, imported CSV headers |
+| Mappings | Mapping rollup for sync-enabled tables |
+| CSV | Row counts from configured files |
+| Change plan | Latest plan status counts (when `create_change_plan = true`) |
 
 ### Maintenance
 
@@ -448,7 +580,7 @@ sync = false
 | `continue_on_error` | When `true`, keep processing other tables/records after a non-fatal error |
 | `max_parallel_tables` | Maximum tables processed concurrently |
 | `max_parallel_updates` | Maximum concurrent update operations per table |
-| `create_change_plan` | When `true`, persist a change plan to SQLite before apply |
+| `create_change_plan` | When `true`, persist a change plan to SQLite (`sync dry-run`) |
 
 ### `[csv]`
 
@@ -555,18 +687,22 @@ Airtable Sync is built on the Nest framework and uses the following core crates:
 
 ---
 
-## GUI (planned)
+## GUI
 
 The desktop host (`airtable-sync-gui`, via `nest-gui`) is a **front end only**. It does not implement sync, mapping, or database logic itself.
 
-**Rule:** the GUI runs the same commands as the CLI. Buttons, wizards, and progress views invoke the existing CLI command pipeline (e.g. `setup init`, `mapping auto`, `sync dry-run`) — typically through `airtable-sync-core` and `CliApp::try_run_with` with explicit args, not duplicate business code in the GUI crate.
+**Rule:** the GUI runs the same commands as the CLI. Buttons invoke the existing CLI command pipeline through `airtable-sync-core` and `CliApp::try_run_with` with explicit args — no duplicate business code in the GUI crate.
 
 | Host | Role |
 |------|------|
 | **CLI** (`airtable-sync-cli`) | Primary execution surface — all behavior lives in command handlers in `airtable-sync-core`. |
-| **GUI** (planned) | Presents workflow UI; dispatches to the same commands the CLI exposes. |
+| **GUI** (`airtable-sync-gui`) | Minimal v1 shell: grouped command buttons, scrollable output panel, light/dark theme toggle. |
 
-First Run in the GUI maps to `setup init`. Compare, mapping review, and sync approval map to the corresponding CLI groups documented above.
+```bash
+./build run-gui    # uses config.toml when present
+```
+
+First Run in the GUI will map to `setup init` when that command is implemented. Compare, mapping review, and sync approval map to the corresponding CLI groups documented above.
 
 See [docs/architecture.md](docs/architecture.md) for the host model.
 
@@ -576,8 +712,9 @@ See [docs/architecture.md](docs/architecture.md) for the host model.
 
 | Crate | Path | Role |
 |-------|------|------|
-| `airtable-sync-core` | `crates/core/` | Commands, sync logic, shared modules |
+| `airtable-sync-core` | `crates/core/` | Commands, sync logic, shared modules, GUI dispatch |
 | `airtable-sync-cli` | `crates/cli/` | CLI binary (`airtable-sync`) |
+| `airtable-sync-gui` | `crates/gui/` | GUI binary (`airtable-sync-gui`) — dispatches to core commands |
 
 ```bash
 ./build build
@@ -585,7 +722,7 @@ See [docs/architecture.md](docs/architecture.md) for the host model.
 ./build release
 ```
 
-- Binary: `target/release/airtable-sync`
+- Binary: `target/release/airtable-sync` (CLI), `target/release/airtable-sync-gui` (GUI)
 - Logs: `./logs/`
 
 Nest crates are pulled from [github.com/pacificnm/nest](https://github.com/pacificnm/nest). When cloned under `nest/apps/airtable-sync/`, `.cargo/config.toml` path-patches the local framework checkout.
