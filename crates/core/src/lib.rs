@@ -1,12 +1,22 @@
 //! Shared Airtable Sync application logic.
 //!
 //! Product code for [airtable-sync](https://github.com/pacificnm/airtable-sync).
-//! CLI and future GUI hosts compose [`cli_app`] with domain commands from this crate.
+//!
+//! **Execution model:** all behavior is implemented as CLI commands in this crate.
+//! The CLI binary and the future GUI host both dispatch here — the GUI does not
+//! duplicate business logic; it runs the same commands (see `docs/architecture.md`).
 
 #![deny(missing_docs)]
 
+pub mod airtable;
 pub mod commands;
+pub mod compare;
+pub mod config;
+pub mod csv;
+pub mod db;
+pub mod mapping;
 
 mod app;
 
-pub use app::cli_app;
+pub use app::{cli_app, cli_app_with_version, cli_help_text, group_help_text, DEFAULT_VERSION};
+pub use commands::{CommandGroupSpec, SubcommandSpec, COMMAND_GROUPS};

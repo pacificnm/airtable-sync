@@ -11,10 +11,29 @@ rust-version = "1.75"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-nest-airtable = { git = "https://github.com/pacificnm/nest.git", branch = "main" }
+# Nest — core
 nest-cli = { git = "https://github.com/pacificnm/nest.git", branch = "main" }
 nest-config = { git = "https://github.com/pacificnm/nest.git", branch = "main" }
 nest-core = { git = "https://github.com/pacificnm/nest.git", branch = "main" }
 nest-error = { git = "https://github.com/pacificnm/nest.git", branch = "main" }
+nest-file = { git = "https://github.com/pacificnm/nest.git", branch = "main" }
+nest-file-csv = { git = "https://github.com/pacificnm/nest.git", branch = "main" }
+nest-http = { git = "https://github.com/pacificnm/nest.git", branch = "main" }
 nest-http-client = { git = "https://github.com/pacificnm/nest.git", branch = "main" }
 nest-logging = { git = "https://github.com/pacificnm/nest.git", branch = "main" }
+nest-task = { git = "https://github.com/pacificnm/nest.git", branch = "main" }
+nest-task-runtime = { git = "https://github.com/pacificnm/nest.git", branch = "main" }
+nest-validation = { git = "https://github.com/pacificnm/nest.git", branch = "main" }
+nest-data = { git = "https://github.com/pacificnm/nest.git", branch = "main" }
+# Nest — modules
+nest-airtable = { git = "https://github.com/pacificnm/nest.git", branch = "main" }
+nest-data-sqlite = { git = "https://github.com/pacificnm/nest.git", branch = "main" }
+# Additional
+async-trait = "0.1"
+clap = { version = "4", features = ["derive"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+tracing = "0.1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

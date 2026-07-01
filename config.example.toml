@@ -1,11 +1,126 @@
+# Copy to config.toml and set paths, base_id, table_id values, and your token.
+# config.toml is gitignored — store secrets there, not in git.
+
 [airtable]
 api_url = "https://api.airtable.com/v0"
-token_env = "AIRTABLE_TOKEN"
+# token = "pat..."                    # preferred: token directly in config.toml
+token_env = "AIRTABLE_TOKEN"          # alternate: environment variable name
 base_id = "appXXXXXXXXXXXXXX"
 
-[airtable.tables.assets]
+[sync]
+dry_run = true
+continue_on_error = true
+max_parallel_tables = 2
+max_parallel_updates = 5
+create_change_plan = true
+
+# Tables with sync = true require primary_key_field (Airtable field used to match CSV rows).
+
+[airtable.tables.business_unit]
 table_id = "tblXXXXXXXXXXXXXX"
-primary_key_field = "Asset ID"
+sync = true
+primary_key_field = "Business Unit ID"
+
+[airtable.tables.service_line]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = false
+
+[airtable.tables.department]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = false
+
+[airtable.tables.teams]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = false
+
+[airtable.tables.service]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = false
+
+[airtable.tables.building]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = true
+primary_key_field = "Building ID"
+
+[airtable.tables.region]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = true
+
+[airtable.tables.neighborhood]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = false
+
+[airtable.tables.city]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = true
+
+[airtable.tables.state]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = false
+
+[airtable.tables.country]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = true
+
+[airtable.tables.building_status]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = true
+
+[airtable.tables.building_classification]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = true
+
+[airtable.tables.vendors]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = false
+
+[airtable.tables.vendor_contacts]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = false
+
+[airtable.tables.links]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = false
+
+[airtable.tables.people]
+table_id = "tblXXXXXXXXXXXXXX"
+
+[airtable.tables.space]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = true
+
+[airtable.tables.data_dictionary]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = false
+
+[airtable.tables.merge]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = false
+
+[airtable.tables.utility_server_management]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = false
+
+[airtable.tables.emergency_contacts]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = false
+
+[airtable.tables.nike_region]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = true
+
+[airtable.tables.nike_territory]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = true
+
+[csv]
+location_data_file = "/path/to/location.csv"
+space_data_file = "/path/to/space.csv"
+
+[database]
+provider = "sqlite"
+database_path = "/path/to/airtable-sync.db"
+schema = "./schema/airtable-sync.sql"
 
 [logging]
 level = "info"

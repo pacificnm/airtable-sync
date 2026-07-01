@@ -34,6 +34,9 @@ case "$cmd" in
     if [[ -f "$APP_ROOT/config.toml" ]]; then
       config_args=(--config "$APP_ROOT/config.toml")
     fi
+    if [[ "${1:-}" == "--" ]]; then
+      shift
+    fi
     exec "$bin" "${config_args[@]}" "$@"
     ;;
   test)

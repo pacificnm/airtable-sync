@@ -14,5 +14,5 @@ path = "src/main.rs"
 
 [dependencies]
 airtable-sync-core = { path = "../core" }
-nest-cli = { workspace = true, features = ["async"] }
+nest-cli = { workspace = true }
 nest-logging = { workspace = true }

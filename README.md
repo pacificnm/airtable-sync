@@ -1,47 +1,591 @@
 # Airtable Sync
 
-Sync tooling for [Airtable](https://airtable.com), built on the [Nest](https://github.com/pacificnm/nest) framework.
+Sync data between CSV sources and [Airtable](https://airtable.com), built on the [Nest](https://github.com/pacificnm/nest) framework.
 
-This is the **product repository**. Application code lives here — not in the Nest framework monorepo.
+This README is organized around the **user workflow** — from first-time setup through configuration, mapping, comparison, and synchronization. Commands are grouped by the step you are performing, not by implementation detail.
 
-## Crates
+> **Status:** Milestone 1 complete — full command tree and branded `--help`. **`config validate`**, **`config show`**, **`config init`**, **`db init`**, **`db reset`**, **`db schema`**, **`db migrate`**, **`airtable test`**, **`airtable pull-schema`**, **`airtable list-tables`**, **`airtable list-fields`**, **`csv import-headers`**, **`csv preview`**, **`csv validate`**, **`mapping list`**, **`mapping set`**, **`mapping remove`**, **`mapping enable`**, **`mapping disable`**, **`mapping report`**, **`compare table`**, and **`version`** are implemented; other commands are stubs.
 
-| Crate | Path | Role |
-|-------|------|------|
-| `airtable-sync-core` | `crates/core/` | Shared modules, commands, and sync logic |
-| `airtable-sync-cli` | `crates/cli/` | CLI binary (`airtable-sync`) |
+---
 
-Planned: `crates/gui/` (`airtable-sync-gui`).
+## Quick start
 
-## Build
+**First run** — one command prepares everything:
 
 ```bash
-cp config.example.toml config.toml
+cp config.example.toml config.toml   # or: airtable-sync config init
 export AIRTABLE_TOKEN="pat..."
 
-./build build
-./build release
-./build run -- tables
-./build run -- list assets --json
+airtable-sync setup init
 ```
 
-- Binary: `target/release/airtable-sync`
-- Config: `config.toml` (auto-loaded on `run`)
-- Logs: `./logs/` (see `config.example.toml`)
+`setup init` performs:
 
-## Nest dependencies
+- Validate configuration
+- Create the SQLite database
+- Download the Airtable schema
+- Import CSV headers
+- Auto-map matching fields
+- Report unmapped fields
 
-Nest crates are pulled from [github.com/pacificnm/nest](https://github.com/pacificnm/nest) via `git` in the workspace `Cargo.toml`.
+Then follow the workflow below for compare and sync.
 
-For local framework development, override with a `.cargo/config.toml` `patch` section pointing at a sibling `nest` checkout.
+**Build from source:**
 
-## Configuration
+```bash
+./build build
+./build run -- setup init    # passes args after --
+```
 
-See `config.example.toml`. Copy to `config.toml` and set `base_id`, table sections, and `AIRTABLE_TOKEN`.
+---
+
+## Typical workflow
+
+```bash
+# 1. Configure
+airtable-sync config validate
+
+# 2. Initialize local database (first run only; use db reset --yes to recreate)
+airtable-sync db init
+
+# 3. Download Airtable schema
+airtable-sync airtable pull-schema
+
+# 4. Import CSV headers
+airtable-sync csv import-headers
+
+# 5. Auto-map fields
+airtable-sync mapping auto
+
+# 6. Review mappings
+airtable-sync mapping list
+
+# 7. Compare data
+airtable-sync compare all
+
+# 8. Generate change plan
+airtable-sync sync dry-run
+
+# 9. Apply updates
+airtable-sync sync apply
+```
+
+Steps 1–5 are replaced by `airtable-sync setup init` on first run. Steps 6–9 are the repeat cycle before each sync.
+
+---
 
 ## Commands
 
+### Setup
+
 | Command | Description |
 |---------|-------------|
-| `tables` | List configured logical table names |
-| `list <table>` | Fetch all records from a table (`--json` for output) |
+| `setup init` | First-run wizard: validate config, init DB, pull schema, import CSV headers, auto-map, report unmapped fields |
+
+### Configuration
+
+| Command | Description |
+|---------|-------------|
+| `config validate` | Validate `config.toml` |
+| `config show` | Display the loaded configuration |
+| `config init` | Create a default `config.toml` |
+
+#### `config validate`
+
+Checks TOML structure, paths, tokens, and table settings. When the SQLite database exists and `airtable pull-schema` has been run, it also verifies each configured `primary_key_field` against the cached Airtable field names (fails if the name does not match any field on that table).
+
+```bash
+airtable-sync config validate
+```
+
+If validation reports an unknown `primary_key_field`, run `airtable list-fields <table>` and use the exact Airtable field name from the cache.
+
+### Database
+
+| Command | Description |
+|---------|-------------|
+| `db init` | Create the SQLite database (first time only) |
+| `db reset --yes` | Recreate the database (**destructive**; deletes all local sync data) |
+| `db schema` | Introspect the live SQLite database (tables, columns, migrations); requires an existing DB |
+| `db migrate` | Apply pending database migrations; creates the DB if missing |
+
+#### `db schema`
+
+Read-only inspection of the database at `[database].database_path`. Does not print the schema SQL file — it queries the live database (tables, columns, applied migrations from `_nest_migrations`).
+
+Requires the database file to exist (run `db init` or `db reset --yes` first):
+
+```bash
+airtable-sync db schema
+airtable-sync db schema --json
+```
+
+#### `db migrate`
+
+Applies pending migrations from the product registry (currently `001_initial_schema` from `[database].schema`). Safe to re-run — no-op when already up to date. Does **not** delete data (unlike `db reset`).
+
+If the database file does not exist, `db migrate` creates it and applies all migrations (similar to `db init`, but `db init` fails when the file already exists).
+
+```bash
+airtable-sync db migrate
+airtable-sync db migrate --json
+```
+
+Use `db init` for an explicit first-time create, or `db migrate` for upgrades and catch-up.
+
+#### `db init` vs `db reset`
+
+Both commands validate config, apply the schema from `[database].schema`, and record migration `001_initial_schema`. Use one or the other — not both in sequence.
+
+| Situation | Command |
+|-----------|---------|
+| No database file yet (first run) | `db init` |
+| Database already exists and you want a clean slate | `db reset --yes` |
+| Just ran `db reset --yes` successfully | **Do nothing** — the database is already created |
+
+`db init` **fails** if the database file already exists (even an empty file). That is intentional — use `db reset --yes` to recreate instead.
+
+`db reset` **requires `--yes`** before it deletes anything. Without it, the command refuses to run:
+
+```bash
+# First time — no database file yet
+airtable-sync db init
+
+# Wipe and recreate (destructive)
+airtable-sync db reset --yes
+
+# After a successful reset, skip db init — reset already recreated the database
+```
+
+When developing locally with `./build run`, rebuild after code changes so you are not running a stale binary:
+
+```bash
+./build build
+./build run -- db init
+./build run -- db reset --yes
+./build run -- db migrate
+./build run -- airtable test
+```
+
+#### `airtable test`
+
+Validates `config.toml`, then probes Airtable by listing one record page (`pageSize=1`) from the first sync-enabled table (or the first configured table if none are marked `sync = true`). Uses `nest-http-client` and `nest-airtable` under the hood.
+
+```bash
+airtable-sync airtable test
+airtable-sync airtable test --json
+```
+
+#### `airtable pull-schema`
+
+Downloads table and field metadata from the Airtable **Meta API** into SQLite (`airtable_tables`, `airtable_fields`). Requires PAT scope **`schema.bases:read`**. Pulls **all configured tables** from `config.toml` (not only `sync = true`).
+
+- **Upsert only** — re-pull updates schema metadata; does not delete stale field rows (mapping columns `sync_enabled` and `csv_field` are preserved).
+- **Permissive on pull** — missing tables or empty field lists produce warnings, not hard failures.
+- **Strict validation** applies when pushing updates to Airtable (compare/sync commands — future milestone).
+
+```bash
+airtable-sync airtable pull-schema
+airtable-sync --json airtable pull-schema
+```
+
+#### `airtable list-tables`
+
+Lists tables cached in SQLite by a prior `airtable pull-schema` run. Read-only — no Airtable API calls.
+
+```bash
+airtable-sync airtable list-tables
+airtable-sync --json airtable list-tables
+```
+
+If the cache is empty, the command succeeds and suggests running `airtable pull-schema` first.
+
+#### `airtable list-fields`
+
+Lists fields cached in SQLite for one table by logical name (from config / `list-tables`). Read-only — no Airtable API calls. Requires a prior `airtable pull-schema`.
+
+```bash
+airtable-sync airtable list-fields assets
+airtable-sync --json airtable list-fields assets
+```
+
+If the table is unknown or not cached, the command fails with a hint to run `pull-schema` or `list-tables`.
+
+### Airtable
+
+| Command | Description |
+|---------|-------------|
+| `airtable test` | Test Airtable connectivity |
+| `airtable pull-schema` | Download tables and fields into SQLite |
+| `airtable list-tables` | List configured Airtable tables |
+| `airtable list-fields` | List fields for a table |
+
+### CSV
+
+| Command | Description |
+|---------|-------------|
+| `csv import-headers` | Import CSV headers into SQLite |
+| `csv preview` | Preview CSV records |
+| `csv validate` | Validate CSV structure |
+
+#### `csv import-headers`
+
+Reads column headers from `[csv].location_data_file` and `[csv].space_data_file` into SQLite `csv_fields`, one row per column per file (`filename` stores the CSV basename). Replaces the previous import on each run. Requires `db init` first.
+
+```bash
+airtable-sync csv import-headers
+airtable-sync --json csv import-headers
+```
+
+#### `csv preview`
+
+Read-only preview of sample data rows from one configured CSV file. Requires `location` or `space` as the file argument. No database access.
+
+```bash
+airtable-sync csv preview location
+airtable-sync csv preview space --limit 10
+airtable-sync --json csv preview location
+```
+
+#### `csv validate`
+
+Read-only structural validation of configured CSV file(s). Scans headers and every data row. **No database access.**
+
+Validates **both** `location` and `space` files when no file argument is given. Warnings (empty or duplicate headers) are printed but do not fail the command. Errors (parse failure, ragged rows) fail with exit code non-zero.
+
+```bash
+airtable-sync csv validate
+airtable-sync csv validate location
+airtable-sync csv validate space
+airtable-sync --json csv validate
+```
+
+### Mapping
+
+| Command | Description |
+|---------|-------------|
+| `mapping auto` | Auto-map CSV fields to Airtable fields |
+| `mapping list` | Display current mappings |
+| `mapping set` | Create or update a field mapping |
+| `mapping remove` | Remove a mapping |
+| `mapping enable` | Enable field synchronization |
+| `mapping disable` | Disable field synchronization |
+| `mapping report` | Generate mapping report |
+
+#### `mapping list`
+
+Lists all non-computed Airtable fields for one table with mapping columns (`csv_field`, `csv_file`, `sync_enabled`). Read-only — requires a prior `airtable pull-schema`.
+
+```bash
+airtable-sync mapping list building
+airtable-sync --json mapping list assets
+```
+
+#### `mapping set`
+
+Creates or updates a single field mapping in SQLite (`csv_field`, `csv_filename`, optional `sync_enabled`). Requires prior `airtable pull-schema` and `csv import-headers`. The same CSV column can map to fields in multiple Airtable tables — each field stores its own `csv_file` source.
+
+```bash
+airtable-sync mapping set building Name name
+airtable-sync mapping set space Area area --csv-file space
+airtable-sync mapping set building Status status --enable
+airtable-sync --json mapping set assets Name name
+```
+
+| Argument / flag | Description |
+|-----------------|-------------|
+| `TABLE` | Logical table name from config |
+| `FIELD` | Airtable field name (as in schema cache) |
+| `CSV_COLUMN` | CSV header or column to map (normalized on store) |
+| `--csv-file location\|space` | Required when the same normalized column exists in both CSV files; stored as `csv_filename` |
+| `--enable` | Set `sync_enabled = true` (preserves existing value when omitted) |
+| `--disable` | Set `sync_enabled = false` (preserves existing value when omitted) |
+
+`--enable` and `--disable` are mutually exclusive. When neither flag is passed, `sync_enabled` is left unchanged.
+
+#### `mapping remove`
+
+Clears `csv_field`, `csv_filename`, and `sync_enabled` for one non-computed field. Requires prior `airtable pull-schema`. Succeeds when the field has no mapping (`removed: false` in JSON).
+
+```bash
+airtable-sync mapping remove building Name
+airtable-sync --json mapping remove assets Name
+```
+
+#### `mapping enable`
+
+Sets `sync_enabled = true` for one mapped field without changing `csv_field` or `csv_filename`. Requires a prior CSV mapping (`mapping set`). Fails if the field has no mapping.
+
+```bash
+airtable-sync mapping enable building Name
+airtable-sync --json mapping enable assets Name
+```
+
+#### `mapping disable`
+
+Sets `sync_enabled = false` for one mapped field without changing `csv_field` or `csv_filename`. Requires a prior CSV mapping (`mapping set`).
+
+```bash
+airtable-sync mapping disable building Name
+airtable-sync --json mapping disable assets Name
+```
+
+#### `mapping report`
+
+Read-only mapping summary across **all cached tables**. Reports per-table and overall counts (mapped, unmapped, sync enabled, mapped but sync disabled) and lists unmapped field names. Requires prior `airtable pull-schema`.
+
+```bash
+airtable-sync mapping report
+airtable-sync --json mapping report
+```
+
+Use `mapping list <table>` for full field-level detail on one table.
+
+#### `compare table`
+
+Compares one configured table's CSV rows against live Airtable records. Rows are matched by `primary_key_field` from config; that field must be mapped to a CSV column. Only **sync-enabled** mapped fields from the same CSV file as the primary key are compared.
+
+Requires prior `airtable pull-schema`, `csv import-headers`, and field mappings (`mapping set` + `mapping enable`).
+
+```bash
+airtable-sync compare table building
+airtable-sync --json compare table city
+```
+
+Reports summary counts (matched, differing, CSV-only, Airtable-only) and lists field-level differences.
+
+| Command | Description |
+|---------|-------------|
+| `compare table` | Compare one table (implemented) |
+| `compare all` | Compare every configured table |
+
+### Sync
+
+| Command | Description |
+|---------|-------------|
+| `sync dry-run` | Generate update plan only (no writes) |
+| `sync apply` | Apply approved updates |
+| `sync table` | Synchronize a single table |
+| `sync all` | Synchronize all enabled tables |
+
+### Reports
+
+| Command | Description |
+|---------|-------------|
+| `report changes` | Generate change report |
+| `report validation` | Validation report |
+| `report summary` | Overall sync summary |
+
+### Maintenance
+
+| Command | Description |
+|---------|-------------|
+| `cache clear` | Clear cached schema |
+| `logs show` | View recent logs |
+| `version` | Display version information |
+
+---
+
+## Configuration
+
+Copy `config.example.toml` to `config.toml` (or run `config init`). `config.toml` is gitignored — it holds environment-specific paths, table IDs, and secrets.
+
+Most commands load `config.toml` from the current directory automatically when present.
+
+### Sections overview
+
+| Section | Purpose |
+|---------|---------|
+| `[airtable]` | Airtable API connection (base URL, token, base ID) |
+| `[airtable.tables.<name>]` | One block per logical table — Airtable table ID and sync enablement |
+| `[sync]` | Global synchronization behavior (dry-run, parallelism, change plans) |
+| `[csv]` | Input CSV file paths for location and space data |
+| `[database]` | Local SQLite database path and schema script |
+| `[logging]` | Log level and output directory |
+
+### `[airtable]`
+
+| Key | Description |
+|-----|-------------|
+| `api_url` | Airtable REST API base URL (default `https://api.airtable.com/v0`) |
+| `token` | Personal access token stored directly in gitignored `config.toml` (preferred) |
+| `token_env` | Environment variable name for the token, or legacy direct token value in config |
+| `base_id` | Airtable base ID (`app…`) |
+
+### `[airtable.tables.<name>]`
+
+Define one section per table using a stable **logical name** (snake_case). Commands and mappings refer to this name, not the Airtable table title.
+
+| Key | Description |
+|-----|-------------|
+| `table_id` | Airtable table ID (`tbl…`) |
+| `sync` | When `true`, the table is included in `sync all` and bulk compare operations (default `false` if omitted) |
+| `primary_key_field` | Airtable field name used as the record key for compare/sync. **Required** when `sync = true` |
+
+Example — enable sync for a subset of tables:
+
+```toml
+[airtable.tables.building]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = true
+primary_key_field = "Building ID"
+
+[airtable.tables.city]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = true
+primary_key_field = "City ID"
+
+[airtable.tables.department]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = false
+```
+
+### `[sync]`
+
+| Key | Description |
+|-----|-------------|
+| `dry_run` | When `true`, sync commands plan changes without writing to Airtable |
+| `continue_on_error` | When `true`, keep processing other tables/records after a non-fatal error |
+| `max_parallel_tables` | Maximum tables processed concurrently |
+| `max_parallel_updates` | Maximum concurrent update operations per table |
+| `create_change_plan` | When `true`, persist a change plan to SQLite before apply |
+
+### `[csv]`
+
+| Key | Description |
+|-----|-------------|
+| `location_data_file` | Path to the location CSV used for header import, mapping, and compare |
+| `space_data_file` | Path to the space CSV used for header import, mapping, and compare |
+
+### `[database]`
+
+| Key | Description |
+|-----|-------------|
+| `provider` | Database backend (`sqlite`) |
+| `database_path` | Path to the SQLite file (schema, mappings, sync history, change plans) |
+| `schema` | Path to the SQL schema file applied by `db init`, `db reset`, and `db migrate` |
+
+### `[logging]`
+
+| Key | Description |
+|-----|-------------|
+| `level` | Log level (`trace`, `debug`, `info`, `warn`, `error`) |
+| `directory` | Directory for log files (e.g. `./logs`) |
+
+### Full example
+
+```toml
+[airtable]
+api_url = "https://api.airtable.com/v0"
+token = "pat..."
+base_id = "appXXXXXXXXXXXXXX"
+
+[sync]
+dry_run = true
+continue_on_error = true
+max_parallel_tables = 2
+max_parallel_updates = 5
+create_change_plan = true
+
+[airtable.tables.building]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = true
+primary_key_field = "Building ID"
+
+[airtable.tables.city]
+table_id = "tblXXXXXXXXXXXXXX"
+sync = true
+primary_key_field = "City ID"
+
+[airtable.tables.people]
+table_id = "tblXXXXXXXXXXXXXX"
+# sync omitted — treated as disabled
+
+[csv]
+location_data_file = "/path/to/location.csv"
+space_data_file = "/path/to/space.csv"
+
+[database]
+provider = "sqlite"
+database_path = "/path/to/airtable-sync.db"
+schema = "./schema/airtable-sync.sql"
+
+[logging]
+level = "info"
+directory = "./logs"
+```
+
+Set credentials in gitignored `config.toml` (`token` preferred) or export the env var named by `token_env`:
+
+```bash
+export AIRTABLE_TOKEN="pat..."   # when using token_env = "AIRTABLE_TOKEN"
+```
+
+The token needs **`data.records:read`** (and update scopes for sync) plus **`schema.bases:read`** for `airtable pull-schema`.
+
+---
+
+## Dependencies
+
+Airtable Sync is built on the Nest framework and uses the following core crates:
+
+| Crate | Purpose |
+|--------|---------|
+| **nest-core** | Core module system, dependency injection, application context, and shared services. |
+| **nest-cli** | Command-line host, command registration, argument parsing, and application startup. |
+| **nest-config** | Loads and validates `config.toml` application configuration. |
+| **nest-error** | Structured error handling and application-wide error reporting. |
+| **nest-logging** | Logging initialization, log configuration, and tracing integration. |
+| **nest-file** | Safe file operations including reading, writing, copying, moving, and path validation. |
+| **nest-file-csv** | CSV parsing, serialization, column mapping, and import/export utilities. |
+| **nest-http** | Shared HTTP contracts, request/response models, and common HTTP types. |
+| **nest-http-client** | HTTP client for communicating with external services, including Airtable. |
+| **nest-airtable** | Airtable API client, schema discovery, record operations, batching, and synchronization helpers. |
+| **nest-task** | Background task execution, progress reporting, cancellation, and async task management. |
+| **nest-validation** | Validation framework for configuration, CSV data, mappings, and synchronization rules. |
+
+### Additional libraries
+
+| Library | Purpose |
+|---------|---------|
+| **rusqlite** | Local SQLite database used to store Airtable schema, field mappings, application settings, sync history, and change plans. |
+| **serde** | Serialization and deserialization of configuration and application models. |
+| **toml** | Parsing and writing application configuration files. |
+| **tracing** | Structured instrumentation used throughout the application. |
+
+---
+
+## GUI (planned)
+
+The desktop host (`airtable-sync-gui`, via `nest-gui`) is a **front end only**. It does not implement sync, mapping, or database logic itself.
+
+**Rule:** the GUI runs the same commands as the CLI. Buttons, wizards, and progress views invoke the existing CLI command pipeline (e.g. `setup init`, `mapping auto`, `sync dry-run`) — typically through `airtable-sync-core` and `CliApp::try_run_with` with explicit args, not duplicate business code in the GUI crate.
+
+| Host | Role |
+|------|------|
+| **CLI** (`airtable-sync-cli`) | Primary execution surface — all behavior lives in command handlers in `airtable-sync-core`. |
+| **GUI** (planned) | Presents workflow UI; dispatches to the same commands the CLI exposes. |
+
+First Run in the GUI maps to `setup init`. Compare, mapping review, and sync approval map to the corresponding CLI groups documented above.
+
+See [docs/architecture.md](docs/architecture.md) for the host model.
+
+---
+
+## Development
+
+| Crate | Path | Role |
+|-------|------|------|
+| `airtable-sync-core` | `crates/core/` | Commands, sync logic, shared modules |
+| `airtable-sync-cli` | `crates/cli/` | CLI binary (`airtable-sync`) |
+
+```bash
+./build build
+./build test
+./build release
+```
+
+- Binary: `target/release/airtable-sync`
+- Logs: `./logs/`
+
+Nest crates are pulled from [github.com/pacificnm/nest](https://github.com/pacificnm/nest). When cloned under `nest/apps/airtable-sync/`, `.cargo/config.toml` path-patches the local framework checkout.
