@@ -24,6 +24,7 @@ nest-logging = { git = "https://github.com/pacificnm/nest.git", branch = "main" 
 nest-task = { git = "https://github.com/pacificnm/nest.git", branch = "main" }
 nest-task-runtime = { git = "https://github.com/pacificnm/nest.git", branch = "main" }
 nest-validation = { git = "https://github.com/pacificnm/nest.git", branch = "main" }
+nest-data = { git = "https://github.com/pacificnm/nest.git", branch = "main" }
 # Nest — modules
 nest-airtable = { git = "https://github.com/pacificnm/nest.git", branch = "main" }
 nest-data-sqlite = { git = "https://github.com/pacificnm/nest.git", branch = "main" }

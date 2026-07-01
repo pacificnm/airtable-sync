@@ -15,6 +15,44 @@ const LOG_LEVELS: &[&str] = &["trace", "debug", "info", "warn", "error"];
 
 /// Validates the loaded application configuration.
 pub fn validate(ctx: &AppContext) -> NestResult<()> {
+    let validated = ensure_valid_config(ctx)?;
+
+    let quiet = ctx
+        .service::<CliGlobals>()
+        .map(|globals| globals.quiet)
+        .unwrap_or(false);
+
+    if !quiet {
+        for warning in validated.warnings {
+            print_warning(&warning);
+        }
+
+        let table_count = validated.app.airtable.tables.len();
+        let sync_count = validated
+            .app
+            .airtable
+            .tables
+            .values()
+            .filter(|table| table.sync)
+            .count();
+        println!("Configuration valid ({table_count} tables, {sync_count} enabled for sync)");
+    }
+
+    Ok(())
+}
+
+/// Loaded configuration that passed full validation.
+pub struct ValidatedConfig {
+    /// Configuration service for the loaded document.
+    pub config: ConfigService,
+    /// Parsed application configuration sections.
+    pub app: AppConfig,
+    /// Non-blocking validation warnings.
+    pub warnings: Vec<ValidationIssue>,
+}
+
+/// Loads configuration and ensures it passes full validation.
+pub fn ensure_valid_config(ctx: &AppContext) -> NestResult<ValidatedConfig> {
     let config = ctx.service::<ConfigService>()?;
     let app = AppConfig::from_service(&config)?;
 
@@ -33,27 +71,11 @@ pub fn validate(ctx: &AppContext) -> NestResult<()> {
         return Err(fail_validation(blocking));
     }
 
-    let quiet = ctx
-        .service::<CliGlobals>()
-        .map(|globals| globals.quiet)
-        .unwrap_or(false);
-
-    if !quiet {
-        for warning in warnings {
-            print_warning(&warning);
-        }
-
-        let table_count = app.airtable.tables.len();
-        let sync_count = app
-            .airtable
-            .tables
-            .values()
-            .filter(|table| table.sync)
-            .count();
-        println!("Configuration valid ({table_count} tables, {sync_count} enabled for sync)");
-    }
-
-    Ok(())
+    Ok(ValidatedConfig {
+        config: config.clone(),
+        app,
+        warnings,
+    })
 }
 
 /// Collects all semantic and path validation issues for the loaded configuration.

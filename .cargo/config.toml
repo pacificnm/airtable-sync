@@ -4,6 +4,7 @@ nest-airtable = { path = "../../modules/crates/nest-airtable" }
 nest-cli = { path = "../../core/crates/nest-cli" }
 nest-config = { path = "../../core/crates/nest-config" }
 nest-core = { path = "../../core/crates/nest-core" }
+nest-data = { path = "../../core/crates/nest-data" }
 nest-data-sqlite = { path = "../../modules/crates/nest-data-sqlite" }
 nest-error = { path = "../../core/crates/nest-error" }
 nest-file = { path = "../../core/crates/nest-file" }

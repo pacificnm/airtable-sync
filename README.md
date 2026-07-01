@@ -4,7 +4,7 @@ Sync data between CSV sources and [Airtable](https://airtable.com), built on the
 
 This README is organized around the **user workflow** — from first-time setup through configuration, mapping, comparison, and synchronization. Commands are grouped by the step you are performing, not by implementation detail.
 
-> **Status:** Milestone 1 complete — full command tree and branded `--help`. **`config validate`** and **`config show`** are implemented; other commands are stubs.
+> **Status:** Milestone 1 complete — full command tree and branded `--help`. **`config validate`**, **`config show`**, **`config init`**, **`db init`**, **`db reset`**, **`db schema`**, and **`db migrate`** are implemented; other commands are stubs.
 
 ---
 
@@ -45,7 +45,7 @@ Then follow the workflow below for compare and sync.
 # 1. Configure
 airtable-sync config validate
 
-# 2. Initialize local database
+# 2. Initialize local database (first run only; use db reset --yes to recreate)
 airtable-sync db init
 
 # 3. Download Airtable schema
@@ -94,10 +94,67 @@ Steps 1–5 are replaced by `airtable-sync setup init` on first run. Steps 6–9
 
 | Command | Description |
 |---------|-------------|
-| `db init` | Create the SQLite database |
-| `db reset` | Recreate the database (**destructive**) |
-| `db schema` | Display database schema information |
-| `db migrate` | Apply database migrations |
+| `db init` | Create the SQLite database (first time only) |
+| `db reset --yes` | Recreate the database (**destructive**; deletes all local sync data) |
+| `db schema` | Introspect the live SQLite database (tables, columns, migrations); requires an existing DB |
+| `db migrate` | Apply pending database migrations; creates the DB if missing |
+
+#### `db schema`
+
+Read-only inspection of the database at `[database].database_path`. Does not print the schema SQL file — it queries the live database (tables, columns, applied migrations from `_nest_migrations`).
+
+Requires the database file to exist (run `db init` or `db reset --yes` first):
+
+```bash
+airtable-sync db schema
+airtable-sync db schema --json
+```
+
+#### `db migrate`
+
+Applies pending migrations from the product registry (currently `001_initial_schema` from `[database].schema`). Safe to re-run — no-op when already up to date. Does **not** delete data (unlike `db reset`).
+
+If the database file does not exist, `db migrate` creates it and applies all migrations (similar to `db init`, but `db init` fails when the file already exists).
+
+```bash
+airtable-sync db migrate
+airtable-sync db migrate --json
+```
+
+Use `db init` for an explicit first-time create, or `db migrate` for upgrades and catch-up.
+
+#### `db init` vs `db reset`
+
+Both commands validate config, apply the schema from `[database].schema`, and record migration `001_initial_schema`. Use one or the other — not both in sequence.
+
+| Situation | Command |
+|-----------|---------|
+| No database file yet (first run) | `db init` |
+| Database already exists and you want a clean slate | `db reset --yes` |
+| Just ran `db reset --yes` successfully | **Do nothing** — the database is already created |
+
+`db init` **fails** if the database file already exists (even an empty file). That is intentional — use `db reset --yes` to recreate instead.
+
+`db reset` **requires `--yes`** before it deletes anything. Without it, the command refuses to run:
+
+```bash
+# First time — no database file yet
+airtable-sync db init
+
+# Wipe and recreate (destructive)
+airtable-sync db reset --yes
+
+# After a successful reset, skip db init — reset already recreated the database
+```
+
+When developing locally with `./build run`, rebuild after code changes so you are not running a stale binary:
+
+```bash
+./build build
+./build run -- db init
+./build run -- db reset --yes
+./build run -- db migrate
+```
 
 ### Airtable
 
@@ -237,7 +294,7 @@ sync = false
 |-----|-------------|
 | `provider` | Database backend (`sqlite`) |
 | `database_path` | Path to the SQLite file (schema, mappings, sync history, change plans) |
-| `schema` | Path to the SQL schema file applied by `db init` / `db migrate` |
+| `schema` | Path to the SQL schema file applied by `db init`, `db reset`, and `db migrate` |
 
 ### `[logging]`
 

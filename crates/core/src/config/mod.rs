@@ -1,5 +1,6 @@
 //! Application configuration sections loaded from `config.toml`.
 
+mod init;
 mod show;
 mod validate;
 
@@ -10,8 +11,9 @@ use nest_config::ConfigService;
 use nest_error::NestResult;
 use serde::Deserialize;
 
+pub use init::init;
 pub use show::show;
-pub use validate::validate;
+pub use validate::{ensure_valid_config, print_warning, validate, ValidatedConfig};
 
 /// Per-table configuration under `[airtable.tables.<name>]`.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]

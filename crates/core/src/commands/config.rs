@@ -1,6 +1,6 @@
 //! `config` command group with nested subcommands.
 
-use clap::Command;
+use clap::{Arg, ArgAction, Command};
 use nest_cli::CliCommand;
 use nest_core::AppContext;
 use nest_error::{NestError, NestResult};
@@ -31,21 +31,39 @@ impl CliCommand for ConfigCommand {
             .arg_required_else_help(true);
 
         for sub in spec.subcommands {
-            cmd = cmd.subcommand(Command::new(sub.name).about(sub.about));
+            let sub_cmd = if sub.name == "init" {
+                Command::new(sub.name)
+                    .about(sub.about)
+                    .arg(
+                        Arg::new("force")
+                            .long("force")
+                            .action(ArgAction::SetTrue)
+                            .help("Overwrite an existing configuration file"),
+                    )
+                    .arg(
+                        Arg::new("output")
+                            .long("output")
+                            .value_name("PATH")
+                            .help("Write config to PATH (default: ./config.toml)"),
+                    )
+            } else {
+                Command::new(sub.name).about(sub.about)
+            };
+            cmd = cmd.subcommand(sub_cmd);
         }
 
         cmd
     }
 
     fn run(&self, ctx: &AppContext, matches: &clap::ArgMatches) -> NestResult<()> {
-        let (subcommand, _sub_matches) = matches.subcommand().ok_or_else(|| {
+        let (subcommand, sub_matches) = matches.subcommand().ok_or_else(|| {
             NestError::command("missing config subcommand")
         })?;
 
         match subcommand {
             "validate" => config::validate(ctx),
             "show" => config::show(ctx),
-            "init" => Ok(()),
+            "init" => config::init(ctx, sub_matches),
             other => Err(NestError::command(format!("unknown config subcommand: {other}"))),
         }
     }
