@@ -165,6 +165,26 @@ pub const COMMAND_GROUPS: &[CommandGroupSpec] = &[
                 about: "Generate update plan only (no writes)",
             },
             SubcommandSpec {
+                name: "review",
+                about: "Review the active change plan",
+            },
+            SubcommandSpec {
+                name: "approve",
+                about: "Approve one pending change",
+            },
+            SubcommandSpec {
+                name: "deny",
+                about: "Deny one pending change",
+            },
+            SubcommandSpec {
+                name: "approve-all",
+                about: "Approve all pending changes in the active plan",
+            },
+            SubcommandSpec {
+                name: "deny-all",
+                about: "Deny all pending changes in the active plan",
+            },
+            SubcommandSpec {
                 name: "apply",
                 about: "Apply approved updates",
             },

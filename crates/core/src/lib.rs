@@ -15,8 +15,12 @@ pub mod config;
 pub mod csv;
 pub mod db;
 pub mod mapping;
+pub mod gui;
+pub mod report;
+pub mod sync;
 
 mod app;
 
 pub use app::{cli_app, cli_app_with_version, cli_help_text, group_help_text, DEFAULT_VERSION};
+pub use gui::{CommandDispatch, DispatchResult};
 pub use commands::{CommandGroupSpec, SubcommandSpec, COMMAND_GROUPS};

@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/core",
     "crates/cli",
+    "crates/gui",
 ]
 
 [workspace.package]
@@ -24,6 +25,9 @@ nest-logging = { git = "https://github.com/pacificnm/nest.git", branch = "main" 
 nest-task = { git = "https://github.com/pacificnm/nest.git", branch = "main" }
 nest-task-runtime = { git = "https://github.com/pacificnm/nest.git", branch = "main" }
 nest-validation = { git = "https://github.com/pacificnm/nest.git", branch = "main" }
+nest-app = { git = "https://github.com/pacificnm/nest.git", branch = "main" }
+nest-gui = { git = "https://github.com/pacificnm/nest.git", branch = "main" }
+nest-theme = { git = "https://github.com/pacificnm/nest.git", branch = "main" }
 nest-data = { git = "https://github.com/pacificnm/nest.git", branch = "main" }
 # Nest — modules
 nest-airtable = { git = "https://github.com/pacificnm/nest.git", branch = "main" }

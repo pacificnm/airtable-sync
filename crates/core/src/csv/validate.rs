@@ -11,7 +11,7 @@ use serde::Serialize;
 
 use crate::config::{ensure_valid_config, print_warning, resolve_config_path};
 use crate::csv::common::{csv_filename, resolve_csv_path, CsvFileRole};
-use crate::csv::validate_reader::{validate_csv_file, CsvValidateReadResult};
+pub(crate) use crate::csv::validate_reader::{validate_csv_file, CsvValidateReadResult};
 use crate::db::absolute_path;
 
 /// Validation outcome for one configured CSV file.
@@ -80,6 +80,45 @@ pub fn validate(ctx: &AppContext, matches: &ArgMatches) -> NestResult<()> {
     print_validate_result(&result, json, quiet)
 }
 
+/// Validates both configured CSV files.
+pub(crate) fn validate_all_configured_csv(
+    config: &nest_config::ConfigService,
+    app: &crate::config::AppConfig,
+) -> ValidateResult {
+    let files = match FileService::new() {
+        Ok(files) => files,
+        Err(_) => {
+            return ValidateResult {
+                files: Vec::new(),
+                valid: false,
+                rows_total: 0,
+            };
+        }
+    };
+
+    let targets = [
+        (CsvFileRole::Location, resolve_config_path(config, &app.csv.location_data_file)),
+        (CsvFileRole::Space, resolve_config_path(config, &app.csv.space_data_file)),
+    ];
+
+    let mut views = Vec::with_capacity(targets.len());
+    for (role, path) in targets {
+        let read = match validate_csv_file(&files, &path) {
+            Ok(read) => read,
+            Err(error) => CsvValidateReadResult {
+                headers: Vec::new(),
+                column_count: 0,
+                row_count: 0,
+                warnings: Vec::new(),
+                errors: vec![error.message().to_string()],
+            },
+        };
+        views.push(ValidateFileView::from_target(role, &path, read));
+    }
+
+    summarize_validation(views)
+}
+
 fn resolve_targets(
     config: &nest_config::ConfigService,
     app: &crate::config::AppConfig,
@@ -106,7 +145,7 @@ fn resolve_targets(
 }
 
 impl ValidateFileView {
-    fn from_target(role: CsvFileRole, path: &Path, read: CsvValidateReadResult) -> Self {
+    pub(crate) fn from_target(role: CsvFileRole, path: &Path, read: CsvValidateReadResult) -> Self {
         Self {
             role: role.as_str().to_string(),
             path: absolute_path(path),
@@ -121,7 +160,7 @@ impl ValidateFileView {
     }
 }
 
-fn summarize_validation(files: Vec<ValidateFileView>) -> ValidateResult {
+pub(crate) fn summarize_validation(files: Vec<ValidateFileView>) -> ValidateResult {
     let rows_total = files.iter().map(|file| file.row_count).sum();
     let valid = files.iter().all(|file| file.valid);
     ValidateResult {

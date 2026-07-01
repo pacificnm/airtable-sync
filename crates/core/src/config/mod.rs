@@ -14,6 +14,7 @@ use serde::Deserialize;
 pub use init::init;
 pub use show::show;
 pub use validate::{ensure_valid_config, print_warning, validate, ValidatedConfig};
+pub(crate) use validate::collect_validation_issues;
 
 /// Per-table configuration under `[airtable.tables.<name>]`.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]

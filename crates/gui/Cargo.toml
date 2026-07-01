@@ -1,0 +1,22 @@
+[package]
+name = "airtable-sync-gui"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository = "https://github.com/pacificnm/airtable-sync"
+description = "Desktop GUI host for Airtable Sync (dispatches to CLI commands)"
+
+[[bin]]
+name = "airtable-sync-gui"
+path = "src/main.rs"
+
+[dependencies]
+airtable-sync-core = { path = "../core" }
+egui = "0.31"
+nest-config = { workspace = true }
+nest-core = { workspace = true }
+nest-error = { workspace = true }
+nest-gui = { workspace = true }
+nest-logging = { workspace = true }
+nest-theme = { workspace = true }

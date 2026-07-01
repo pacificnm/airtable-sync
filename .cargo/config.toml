@@ -15,3 +15,6 @@ nest-logging = { path = "../../core/crates/nest-logging" }
 nest-task = { path = "../../core/crates/nest-task" }
 nest-task-runtime = { path = "../../core/crates/nest-task-runtime" }
 nest-validation = { path = "../../core/crates/nest-validation" }
+nest-app = { path = "../../core/crates/nest-app" }
+nest-gui = { path = "../../core/crates/nest-gui" }
+nest-theme = { path = "../../core/crates/nest-theme" }

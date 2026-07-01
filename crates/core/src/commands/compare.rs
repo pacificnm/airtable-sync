@@ -55,6 +55,7 @@ impl CliCommand for CompareCommand {
 
         match subcommand {
             "table" => compare::compare_table(ctx, sub_matches),
+            "all" => compare::compare_all(ctx),
             other => Err(NestError::command(format!(
                 "compare subcommand `{other}` is not yet implemented"
             ))),

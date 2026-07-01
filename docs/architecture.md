@@ -7,7 +7,7 @@ Airtable Sync uses the Nest **multi-host** pattern: one shared core, multiple pr
 ```text
 ┌─────────────────────┐     ┌─────────────────────┐
 │  airtable-sync-cli  │     │ airtable-sync-gui   │
-│  (nest-cli)         │     │ (nest-gui, planned) │
+│  (nest-cli)         │     │ (nest-gui)          │
 └──────────┬──────────┘     └──────────┬──────────┘
            │                           │
            │    invokes same commands  │
@@ -49,7 +49,7 @@ The GUI **does**:
 |-------|----------------|
 | `airtable-sync-core` | Command tree, handlers, shared services |
 | `airtable-sync-cli` | `main` → `cli_app().run()` |
-| `airtable-sync-gui` (planned) | `nest-gui` host; dispatches to core commands |
+| `airtable-sync-gui` | `nest-gui` host; dispatches to core commands (v1: command grid + output panel) |
 
 ## Related
 

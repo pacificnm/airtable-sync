@@ -11,10 +11,10 @@ shift || true
 
 case "$cmd" in
   build)
-    cargo build -p airtable-sync-cli "$@"
+    cargo build -p airtable-sync-cli -p airtable-sync-gui "$@"
     ;;
   release)
-    cargo build -p airtable-sync-cli --release "$@"
+    cargo build -p airtable-sync-cli -p airtable-sync-gui --release "$@"
     ;;
   run)
     profile=debug
@@ -39,10 +39,33 @@ case "$cmd" in
     fi
     exec "$bin" "${config_args[@]}" "$@"
     ;;
+  run-gui)
+    profile=debug
+    if [[ "${1:-}" == "--release" ]]; then
+      profile=release
+      shift
+    fi
+    bin="$APP_ROOT/target/$profile/airtable-sync-gui"
+    if [[ ! -x "$bin" ]]; then
+      if [[ "$profile" == release ]]; then
+        cargo build -p airtable-sync-gui --release
+      else
+        cargo build -p airtable-sync-gui
+      fi
+    fi
+    config_args=()
+    if [[ -f "$APP_ROOT/config.toml" ]]; then
+      config_args=(--config "$APP_ROOT/config.toml")
+    fi
+    if [[ "${1:-}" == "--" ]]; then
+      shift
+    fi
+    exec "$bin" "${config_args[@]}" "$@"
+    ;;
   test)
-    cargo test -p airtable-sync-core -p airtable-sync-cli "$@"
+    cargo test -p airtable-sync-core -p airtable-sync-cli -p airtable-sync-gui "$@"
     ;;
   *)
-    cargo "$cmd" -p airtable-sync-cli "$@"
+    cargo "$cmd" -p airtable-sync-cli -p airtable-sync-gui "$@"
     ;;
 esac
