@@ -65,6 +65,20 @@ case "$cmd" in
   test)
     cargo test -p airtable-sync-core -p airtable-sync-cli -p airtable-sync-gui "$@"
     ;;
+  desktop | tauri)
+    # Desktop host (Tauri + React). Runs the dev server + webview.
+    if [[ ! -d "$APP_ROOT/ui/node_modules" ]]; then
+      npm install --prefix "$APP_ROOT/ui"
+    fi
+    npm run tauri:dev --prefix "$APP_ROOT/ui" "$@"
+    ;;
+  desktop-build | tauri-build)
+    # Bundle the desktop host (deb/rpm/appimage on Linux).
+    if [[ ! -d "$APP_ROOT/ui/node_modules" ]]; then
+      npm install --prefix "$APP_ROOT/ui"
+    fi
+    npm run tauri:build --prefix "$APP_ROOT/ui" "$@"
+    ;;
   *)
     cargo "$cmd" -p airtable-sync-cli -p airtable-sync-gui "$@"
     ;;
