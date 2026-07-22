@@ -687,22 +687,23 @@ Airtable Sync is built on the Nest framework and uses the following core crates:
 
 ---
 
-## GUI
+## Desktop UI
 
-The desktop host (`airtable-sync-gui`, via `nest-gui`) is a **front end only**. It does not implement sync, mapping, or database logic itself.
+The desktop UI (`airtable-sync-tauri`) is a **front end only**. It does not implement sync, mapping, or database logic itself.
 
-**Rule:** the GUI runs the same commands as the CLI. Buttons invoke the existing CLI command pipeline through `airtable-sync-core` and `CliApp::try_run_with` with explicit args — no duplicate business code in the GUI crate.
+**Rule:** the UI runs the same commands as the CLI. Buttons invoke the existing CLI command pipeline through `airtable-sync-core` and `CliApp::try_run_with` with explicit args — no duplicate business code in the UI crate.
 
 | Host | Role |
 |------|------|
 | **CLI** (`airtable-sync-cli`) | Primary execution surface — all behavior lives in command handlers in `airtable-sync-core`. |
-| **GUI** (`airtable-sync-gui`) | Minimal v1 shell: grouped command buttons, scrollable output panel, light/dark theme toggle. |
+| **Desktop UI** (`airtable-sync-tauri`) | Tauri + React shell: ribbon navigation, command console output, light/dark theme toggle. |
 
 ```bash
-./build run-gui    # uses config.toml when present
+./build desktop      # dev mode
+./build desktop-build # release bundle
 ```
 
-First Run in the GUI will map to `setup init` when that command is implemented. Compare, mapping review, and sync approval map to the corresponding CLI groups documented above.
+First Run in the UI maps to `setup init`. Compare, mapping review, and sync approval map to the corresponding CLI groups documented above.
 
 See [docs/architecture.md](docs/architecture.md) for the host model.
 

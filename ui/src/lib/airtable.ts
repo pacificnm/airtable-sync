@@ -21,7 +21,7 @@ export type GroupInfo = {
   subcommands: SubcommandInfo[];
 };
 
-const PLUGIN = "plugin:airtable_sync";
+const PLUGIN = "plugin:airtable-sync";
 
 /**
  * Runs an `airtable-sync` subcommand in the Rust host.

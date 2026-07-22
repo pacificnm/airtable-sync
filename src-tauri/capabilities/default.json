@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Default capabilities for the Airtable Sync desktop host",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "airtable-sync:default"]
 }

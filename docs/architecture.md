@@ -5,14 +5,14 @@
 Airtable Sync uses the Nest **multi-host** pattern: one shared core, multiple presentation hosts.
 
 ```text
-┌────────────────────┐ ┌────────────────────┐ ┌──────────────────────┐
-│ airtable-sync-cli  │ │ airtable-sync-gui  │ │ airtable-sync-tauri  │
-│ (nest-cli)         │ │ (nest-gui, egui)   │ │ (nest-tauri + React) │
-└─────────┬──────────┘ └─────────┬──────────┘ └──────────┬───────────┘
-          │                      │                        │
-          │         invokes the same core commands        │
-          └──────────────────────┬────────────────────────┘
-                                 ▼
+┌────────────────────┐ ┌──────────────────────┐
+│ airtable-sync-cli  │ │ airtable-sync-tauri  │
+│ (nest-cli)         │ │ (nest-tauri + React) │
+└─────────┬──────────┘ └──────────┬───────────┘
+          │                       │
+          │      invokes the same core commands
+          └───────────────────────┬────────────┘
+                                  ▼
                       ┌─────────────────────┐
                       │  airtable-sync-core │
                       │  commands + logic   │
@@ -49,13 +49,11 @@ The GUI **does**:
 |-------|----------------|
 | `airtable-sync-core` | Command tree, handlers, shared services |
 | `airtable-sync-cli` | `main` → `cli_app().run()` |
-| `airtable-sync-gui` | `nest-gui` (egui) host; dispatches to core commands (command grid + output panel) |
 | `src-tauri/` (`airtable-sync-tauri`) | `nest-tauri` host + React `ui/`; dispatches to core via `CommandDispatch` |
 
 ## Desktop host (Tauri + React)
 
-The Tauri host is the modern desktop front end (the egui `-gui` crate remains as
-the legacy host). It follows the Nest desktop platform: `ui/` (React + Tailwind)
+The Tauri + React host is the desktop front end. It follows the Nest desktop platform: `ui/` (React + Tailwind)
 + `src-tauri/` (`nest-tauri`), themed with the default **`cbre-light`** theme and
 the shared shell components promoted to [`templates/desktop`](../../../templates/desktop).
 

@@ -3,7 +3,7 @@
 //! The desktop UI drives the same command tree as the CLI. Every action is a
 //! subcommand dispatched in-process through [`CommandDispatch`] (no business
 //! logic is duplicated here). Commands are invoked from the UI as
-//! `plugin:airtable_sync|<command>`.
+//! `plugin:airtable-sync|<command>`.
 
 use airtable_sync_core::{CommandDispatch, DispatchResult, COMMAND_GROUPS};
 use serde::Serialize;
@@ -52,7 +52,7 @@ pub struct GroupInfo {
 
 /// Builds the `airtable_sync` Tauri plugin carrying all IPC commands.
 pub fn airtable_sync_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
-    tauri::plugin::Builder::new("airtable_sync")
+    tauri::plugin::Builder::new("airtable-sync")
         .invoke_handler(tauri::generate_handler![
             airtable_sync_run,
             airtable_sync_command_groups,

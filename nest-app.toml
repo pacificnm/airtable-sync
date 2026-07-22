@@ -1,0 +1,7 @@
+# Nest Shell manifest — registers Airtable Sync with the desktop launcher.
+
+[shell]
+name = "Airtable Sync"
+category = "Data"
+icon = "fa-solid fa-table"
+description = "Sync CSV location and space data to Airtable."
