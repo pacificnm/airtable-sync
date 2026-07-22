@@ -14,6 +14,12 @@ use crate::config::AppConfig;
 /// Migration id applied on init and reset.
 pub const MIGRATION_ID: &str = "001_initial_schema";
 
+/// Migration id for change plan tables.
+pub const CHANGE_PLANS_MIGRATION_ID: &str = "002_change_plans";
+
+const CHANGE_PLANS_SQL: &str =
+    include_str!("../../../../schema/migrations/002_change_plans.sql");
+
 /// JSON response for successful `db init` with `--json`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct DbInitResult {
@@ -96,11 +102,18 @@ pub fn registered_migrations(schema_path: &Path) -> NestResult<Vec<Box<dyn Migra
         ))
     })?;
 
-    Ok(vec![Box::new(SqlMigration::new(
-        MIGRATION_ID,
-        schema_sql,
-        initial_schema_down_sql(),
-    ))])
+    Ok(vec![
+        Box::new(SqlMigration::new(
+            MIGRATION_ID,
+            schema_sql,
+            initial_schema_down_sql(),
+        )),
+        Box::new(SqlMigration::new(
+            CHANGE_PLANS_MIGRATION_ID,
+            CHANGE_PLANS_SQL,
+            change_plans_down_sql(),
+        )),
+    ])
 }
 
 /// Applies pending migrations to the database.
@@ -175,6 +188,15 @@ fn initial_schema_down_sql() -> String {
     .join("\n")
 }
 
+fn change_plans_down_sql() -> String {
+    [
+        "DROP TABLE IF EXISTS change_plan_field_changes;",
+        "DROP TABLE IF EXISTS change_plan_operations;",
+        "DROP TABLE IF EXISTS change_plans;",
+    ]
+    .join("\n")
+}
+
 pub(crate) fn absolute_path(path: &Path) -> PathBuf {
     if path.is_absolute() {
         return path.to_path_buf();
@@ -202,8 +224,14 @@ mod tests {
         let result = apply_pending_migrations(&db_path, &schema_path, true).unwrap();
 
         assert!(db_path.is_file());
-        assert_eq!(result.applied, vec![MIGRATION_ID.to_string()]);
-        assert_eq!(result.all_applied, vec![MIGRATION_ID.to_string()]);
+        assert_eq!(
+            result.applied,
+            vec![MIGRATION_ID.to_string(), CHANGE_PLANS_MIGRATION_ID.to_string()]
+        );
+        assert_eq!(
+            result.all_applied,
+            vec![MIGRATION_ID.to_string(), CHANGE_PLANS_MIGRATION_ID.to_string()]
+        );
         assert!(result.database_created);
     }
 
@@ -218,7 +246,10 @@ mod tests {
         let result = apply_pending_migrations(&db_path, &schema_path, false).unwrap();
 
         assert!(result.applied.is_empty());
-        assert_eq!(result.all_applied, vec![MIGRATION_ID.to_string()]);
+        assert_eq!(
+            result.all_applied,
+            vec![MIGRATION_ID.to_string(), CHANGE_PLANS_MIGRATION_ID.to_string()]
+        );
         assert!(!result.database_created);
     }
 }

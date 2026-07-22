@@ -1,0 +1,26 @@
+[package]
+name = "airtable-sync-tauri"
+version = "0.1.0"
+description = "Airtable Sync — desktop host (Tauri + React)"
+edition = "2021"
+rust-version = "1.75"
+
+[[bin]]
+name = "airtable-sync-desktop"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+airtable-sync-core = { path = "../crates/core" }
+nest-config = { path = "../../../core/crates/nest-config" }
+nest-logging = { path = "../../../core/crates/nest-logging" }
+nest-tauri = { path = "../../../core/crates/nest-tauri", features = ["runtime"] }
+nest-theme = { path = "../../../core/crates/nest-theme" }
+dirs = "6.0.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = [] }
+
+[workspace]

@@ -132,6 +132,18 @@ pub fn compare_records(
     }
 }
 
+/// Sums compare summary counts across tables.
+pub fn merge_compare_summaries(left: &CompareSummary, right: &CompareSummary) -> CompareSummary {
+    CompareSummary {
+        csv_rows: left.csv_rows + right.csv_rows,
+        airtable_rows: left.airtable_rows + right.airtable_rows,
+        matched: left.matched + right.matched,
+        differing: left.differing + right.differing,
+        csv_only: left.csv_only + right.csv_only,
+        airtable_only: left.airtable_only + right.airtable_only,
+    }
+}
+
 fn index_airtable_records(
     records: &[AirtableRecord],
     primary_key_field: &str,
@@ -268,5 +280,33 @@ mod tests {
         assert_eq!(result.summary.airtable_only, 1);
         assert_eq!(result.differing_records[0].key, "2");
         assert_eq!(result.airtable_only_keys, vec!["3".to_string()]);
+    }
+
+    #[test]
+    fn merge_compare_summaries_sums_counts() {
+        let left = CompareSummary {
+            csv_rows: 2,
+            airtable_rows: 3,
+            matched: 1,
+            differing: 1,
+            csv_only: 0,
+            airtable_only: 1,
+        };
+        let right = CompareSummary {
+            csv_rows: 5,
+            airtable_rows: 4,
+            matched: 3,
+            differing: 1,
+            csv_only: 1,
+            airtable_only: 0,
+        };
+
+        let merged = merge_compare_summaries(&left, &right);
+        assert_eq!(merged.csv_rows, 7);
+        assert_eq!(merged.airtable_rows, 7);
+        assert_eq!(merged.matched, 4);
+        assert_eq!(merged.differing, 2);
+        assert_eq!(merged.csv_only, 1);
+        assert_eq!(merged.airtable_only, 1);
     }
 }

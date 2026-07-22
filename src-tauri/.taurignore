@@ -1,0 +1,3 @@
+# Runtime artifacts — must not trigger `tauri dev` rebuilds.
+logs/
+target/

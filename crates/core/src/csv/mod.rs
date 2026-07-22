@@ -12,3 +12,5 @@ pub use common::{csv_filename, resolve_csv_path, resolve_csv_path_by_filename, C
 pub use import_headers::import_headers;
 pub use preview::preview;
 pub use validate::validate;
+
+pub(crate) use validate::{validate_all_configured_csv, ValidateResult};

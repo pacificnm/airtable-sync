@@ -125,3 +125,8 @@ schema = "./schema/airtable-sync.sql"
 [logging]
 level = "info"
 directory = "./logs"
+
+[gui]
+title = "Airtable Sync"
+width = 1280
+height = 800

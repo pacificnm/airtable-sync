@@ -5,21 +5,21 @@
 Airtable Sync uses the Nest **multi-host** pattern: one shared core, multiple presentation hosts.
 
 ```text
-┌─────────────────────┐     ┌─────────────────────┐
-│  airtable-sync-cli  │     │ airtable-sync-gui   │
-│  (nest-cli)         │     │ (nest-gui, planned) │
-└──────────┬──────────┘     └──────────┬──────────┘
-           │                           │
-           │    invokes same commands  │
-           └─────────────┬─────────────┘
-                         ▼
-              ┌─────────────────────┐
-              │  airtable-sync-core │
-              │  commands + logic   │
-              └──────────┬──────────┘
-                         │
-                         ▼
-              Nest framework (nest-core, nest-config, modules, …)
+┌────────────────────┐ ┌──────────────────────┐
+│ airtable-sync-cli  │ │ airtable-sync-tauri  │
+│ (nest-cli)         │ │ (nest-tauri + React) │
+└─────────┬──────────┘ └──────────┬───────────┘
+          │                       │
+          │      invokes the same core commands
+          └───────────────────────┬────────────┘
+                                  ▼
+                      ┌─────────────────────┐
+                      │  airtable-sync-core │
+                      │  commands + logic   │
+                      └──────────┬──────────┘
+                                 │
+                                 ▼
+                      Nest framework (nest-core, nest-config, modules, …)
 ```
 
 ## CLI owns execution
@@ -49,9 +49,31 @@ The GUI **does**:
 |-------|----------------|
 | `airtable-sync-core` | Command tree, handlers, shared services |
 | `airtable-sync-cli` | `main` → `cli_app().run()` |
-| `airtable-sync-gui` (planned) | `nest-gui` host; dispatches to core commands |
+| `src-tauri/` (`airtable-sync-tauri`) | `nest-tauri` host + React `ui/`; dispatches to core via `CommandDispatch` |
+
+## Desktop host (Tauri + React)
+
+The Tauri + React host is the desktop front end. It follows the Nest desktop platform: `ui/` (React + Tailwind)
++ `src-tauri/` (`nest-tauri`), themed with the default **`cbre-light`** theme and
+the shared shell components promoted to [`templates/desktop`](../../../templates/desktop).
+
+- **No new business logic.** `src-tauri/src/commands.rs` exposes two IPC commands:
+  - `airtable_sync_run(args, json)` → runs a subcommand through
+    `airtable_sync_core::CommandDispatch` on a blocking thread and returns
+    `{ success, stdout, error }`.
+  - `airtable_sync_command_groups()` → returns the core `COMMAND_GROUPS` tree.
+- **UI.** A `SyncRibbon` (File · Setup · Mapping · Compare · Sync · Report · Help)
+  maps ribbon buttons to core subcommands; results stream into a command console.
+- **Run it:** `./build desktop` (dev) or `./build desktop-build` (bundle).
+
+```text
+src-tauri/  → Tauri host (own cargo workspace; path deps to nest crates)
+ui/         → React app (Vite); shared shell copied from templates/desktop
+```
 
 ## Related
 
 - [README](../README.md) — command workflow
 - [plan/milestone-1-cli-help.md](plan/milestone-1-cli-help.md) — CLI host proof
+- [nest-tauri](../../../docs/nest-tauri/README.md) — desktop host crate
+- [templates/desktop](../../../templates/desktop/README.md) — shared shell + theme

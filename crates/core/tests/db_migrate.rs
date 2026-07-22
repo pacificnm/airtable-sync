@@ -125,7 +125,13 @@ fn migrate_creates_database_when_missing() {
         .unwrap();
 
     assert!(db_path.is_file());
-    assert_eq!(migration_ids(&db_path), vec!["001_initial_schema".to_string()]);
+    assert_eq!(
+        migration_ids(&db_path),
+        vec![
+            "001_initial_schema".to_string(),
+            "002_change_plans".to_string(),
+        ]
+    );
 }
 
 #[test]
@@ -152,7 +158,13 @@ fn migrate_is_noop_when_up_to_date() {
     .unwrap();
 
     assert!(result.applied.is_empty());
-    assert_eq!(result.all_applied, vec!["001_initial_schema".to_string()]);
+    assert_eq!(
+        result.all_applied,
+        vec![
+            "001_initial_schema".to_string(),
+            "002_change_plans".to_string(),
+        ]
+    );
 
     cli_app()
         .try_run_with([

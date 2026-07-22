@@ -91,17 +91,7 @@ pub fn mapping_report(ctx: &AppContext) -> NestResult<()> {
     let store = SchemaStore::new(db);
 
     let tables = store.list_tables_summary().map_err(NestError::from)?;
-    let mut table_reports = Vec::with_capacity(tables.len());
-    let mut overall = MappingReportSummary::default();
-
-    for table in tables {
-        let fields = store
-            .list_mappable_fields(&table.table_id)
-            .map_err(NestError::from)?;
-        let report = build_table_report(&table, &fields);
-        overall = merge_summaries(&overall, &report.summary);
-        table_reports.push(report);
-    }
+    let (table_reports, overall) = build_mapping_table_reports(&store, &tables)?;
 
     let result = MappingReportResult {
         database_path: absolute_path(&database_path),
@@ -111,6 +101,26 @@ pub fn mapping_report(ctx: &AppContext) -> NestResult<()> {
     };
 
     print_mapping_report_success(&result, json, quiet)
+}
+
+/// Builds per-table mapping reports from the schema cache.
+pub(crate) fn build_mapping_table_reports(
+    store: &SchemaStore,
+    tables: &[AirtableTableSummary],
+) -> NestResult<(Vec<MappingReportTableView>, MappingReportSummary)> {
+    let mut table_reports = Vec::with_capacity(tables.len());
+    let mut overall = MappingReportSummary::default();
+
+    for table in tables {
+        let fields = store
+            .list_mappable_fields(&table.table_id)
+            .map_err(NestError::from)?;
+        let report = build_table_report(table, &fields);
+        overall = merge_summaries(&overall, &report.summary);
+        table_reports.push(report);
+    }
+
+    Ok((table_reports, overall))
 }
 
 fn build_table_report(
