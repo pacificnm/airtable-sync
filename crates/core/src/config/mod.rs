@@ -1,6 +1,7 @@
 //! Application configuration sections loaded from `config.toml`.
 
 mod init;
+mod set;
 mod show;
 mod validate;
 
@@ -12,6 +13,7 @@ use nest_error::NestResult;
 use serde::Deserialize;
 
 pub use init::init;
+pub use set::{set, ConfigSetResult};
 pub use show::show;
 pub use validate::{ensure_valid_config, print_warning, validate, ValidatedConfig};
 pub(crate) use validate::collect_validation_issues;

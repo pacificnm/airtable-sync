@@ -8,6 +8,7 @@ import {
 } from "../shell";
 import {
   faBan,
+  faBook,
   faBroom,
   faCheck,
   faCircleInfo,
@@ -37,13 +38,20 @@ export const SYNC_TABS: RibbonTabDef[] = [
   { id: "compare", label: "Compare" },
   { id: "sync", label: "Sync" },
   { id: "report", label: "Report" },
+  { id: "data", label: "Data" },
   { id: "help", label: "Help" },
 ];
 
 type Action = {
   label: string;
   icon: IconDefinition;
-  args: string[];
+  /** CLI subcommand path, e.g. `["sync", "dry-run"]`. Omit for non-`"run"` kinds. */
+  args?: string[];
+  /**
+   * `"docs"` opens the Help viewer; `"validate"`/`"show"`/`"automap"`/`"mappinglist"`/
+   * `"mappingreport"`/`"tables"` open their structured views. All bypass `args`/CLI dispatch.
+   */
+  kind?: "run" | "docs" | "validate" | "show" | "automap" | "mappinglist" | "mappingreport" | "tables";
   tint?: RibbonIconTint;
   large?: boolean;
 };
@@ -58,8 +66,8 @@ const TAB_GROUPS: Record<string, Group[]> = {
     {
       label: "Config",
       actions: [
-        { label: "Validate", icon: faCheck, args: ["config", "validate"], tint: "primary", large: true },
-        { label: "Show", icon: faFileLines, args: ["config", "show"], tint: "neutral" },
+        { label: "Validate", icon: faCheck, kind: "validate", tint: "primary", large: true },
+        { label: "Show", icon: faFileLines, kind: "show", tint: "neutral" },
       ],
     },
   ],
@@ -97,9 +105,9 @@ const TAB_GROUPS: Record<string, Group[]> = {
     {
       label: "Fields",
       actions: [
-        { label: "Auto-map", icon: faDiagramProject, args: ["mapping", "auto"], tint: "primary", large: true },
-        { label: "List", icon: faListCheck, args: ["mapping", "list"], tint: "neutral" },
-        { label: "Report", icon: faFileLines, args: ["mapping", "report"], tint: "neutral" },
+        { label: "Auto-map", icon: faDiagramProject, kind: "automap", tint: "primary", large: true },
+        { label: "List", icon: faListCheck, kind: "mappinglist", tint: "neutral" },
+        { label: "Report", icon: faFileLines, kind: "mappingreport", tint: "neutral" },
       ],
     },
   ],
@@ -144,11 +152,20 @@ const TAB_GROUPS: Record<string, Group[]> = {
       ],
     },
   ],
+  data: [
+    {
+      label: "Data",
+      actions: [
+        { label: "Tables", icon: faTable, kind: "tables", tint: "primary", large: true },
+      ],
+    },
+  ],
   help: [
     {
       label: "Info",
       actions: [
         { label: "Version", icon: faCircleInfo, args: ["version"], tint: "info", large: true },
+        { label: "Docs", icon: faBook, kind: "docs", tint: "secondary", large: true },
         { label: "Logs", icon: faScroll, args: ["logs", "show"], tint: "neutral" },
       ],
     },
@@ -159,20 +176,54 @@ const TAB_GROUPS: Record<string, Group[]> = {
   ],
 };
 
+/** Which non-log view (if any) is currently displayed in the main content area. */
+export type RibbonActiveView =
+  | "log"
+  | "docs"
+  | "validate"
+  | "show"
+  | "settings"
+  | "automap"
+  | "mappinglist"
+  | "mappingreport"
+  | "tables";
+
 type SyncRibbonProps = {
   activeTab: string;
   onTabChange: (tab: string) => void;
   onRun: (args: string[], label: string) => void;
+  onOpenDocs: () => void;
+  onOpenValidate: () => void;
+  onOpenShow: () => void;
+  onOpenSettings: () => void;
+  onOpenAutoMap: () => void;
+  onOpenMappingList: () => void;
+  onOpenMappingReport: () => void;
+  onOpenTables: () => void;
   onQuit: () => void;
   busy: boolean;
+  /** Highlights the Docs/Validate/Show/Settings/Auto-map/List/Report/Tables button matching the view currently on screen. */
+  activeView: RibbonActiveView;
+  /** Args-key (`action.args.join(" ")`) of the last dispatched CLI command, for highlighting it while its output is showing in the log view. */
+  activeRunKey: string | null;
 };
 
 export function SyncRibbon({
   activeTab,
   onTabChange,
   onRun,
+  onOpenDocs,
+  onOpenValidate,
+  onOpenShow,
+  onOpenSettings,
+  onOpenAutoMap,
+  onOpenMappingList,
+  onOpenMappingReport,
+  onOpenTables,
   onQuit,
   busy,
+  activeView,
+  activeRunKey,
 }: SyncRibbonProps) {
   const groups = TAB_GROUPS[activeTab] ?? [];
 
@@ -181,17 +232,44 @@ export function SyncRibbon({
       <div className="flex h-full items-stretch">
         {groups.map((group) => (
           <RibbonGroup key={group.label} label={group.label}>
-            {group.actions.map((action) => (
-              <RibbonButton
-                key={action.label}
-                label={action.label}
-                icon={action.icon}
-                iconTint={action.tint}
-                large={action.large}
-                disabled={busy}
-                onClick={() => onRun(action.args, `${action.args.join(" ")}`)}
-              />
-            ))}
+            {group.actions.map((action) => {
+              const isRun = action.kind === "run" || action.kind === undefined;
+              const runKey = (action.args ?? []).join(" ");
+              const active = isRun
+                ? activeView === "log" && activeRunKey === runKey
+                : action.kind === activeView;
+
+              return (
+                <RibbonButton
+                  key={action.label}
+                  label={action.label}
+                  icon={action.icon}
+                  iconTint={action.tint}
+                  large={action.large}
+                  disabled={isRun ? busy : false}
+                  active={active}
+                  onClick={() => {
+                    if (action.kind === "docs") {
+                      onOpenDocs();
+                    } else if (action.kind === "validate") {
+                      onOpenValidate();
+                    } else if (action.kind === "show") {
+                      onOpenShow();
+                    } else if (action.kind === "automap") {
+                      onOpenAutoMap();
+                    } else if (action.kind === "mappinglist") {
+                      onOpenMappingList();
+                    } else if (action.kind === "mappingreport") {
+                      onOpenMappingReport();
+                    } else if (action.kind === "tables") {
+                      onOpenTables();
+                    } else {
+                      onRun(action.args ?? [], runKey);
+                    }
+                  }}
+                />
+              );
+            })}
           </RibbonGroup>
         ))}
 
@@ -203,7 +281,13 @@ export function SyncRibbon({
               iconTint="neutral"
               onClick={onQuit}
             />
-            <RibbonButton label="Settings" icon={faGear} iconTint="neutral" disabled />
+            <RibbonButton
+              label="Settings"
+              icon={faGear}
+              iconTint="neutral"
+              active={activeView === "settings"}
+              onClick={onOpenSettings}
+            />
           </RibbonGroup>
         ) : null}
       </div>

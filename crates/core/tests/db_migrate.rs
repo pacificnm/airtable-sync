@@ -130,6 +130,7 @@ fn migrate_creates_database_when_missing() {
         vec![
             "001_initial_schema".to_string(),
             "002_change_plans".to_string(),
+            "003_last_synced".to_string(),
         ]
     );
 }
@@ -163,6 +164,7 @@ fn migrate_is_noop_when_up_to_date() {
         vec![
             "001_initial_schema".to_string(),
             "002_change_plans".to_string(),
+            "003_last_synced".to_string(),
         ]
     );
 

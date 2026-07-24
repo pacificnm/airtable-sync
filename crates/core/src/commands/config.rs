@@ -46,6 +46,19 @@ impl CliCommand for ConfigCommand {
                             .value_name("PATH")
                             .help("Write config to PATH (default: ./config.toml)"),
                     )
+            } else if sub.name == "set" {
+                Command::new(sub.name)
+                    .about(sub.about)
+                    .arg(
+                        Arg::new("key")
+                            .required(true)
+                            .help("Dotted config key, e.g. airtable.base_id or airtable.tables.<name>.sync"),
+                    )
+                    .arg(
+                        Arg::new("value")
+                            .required(true)
+                            .help("New value (\"true\"/\"false\" for sync; empty unsets an optional field)"),
+                    )
             } else {
                 Command::new(sub.name).about(sub.about)
             };
@@ -64,6 +77,15 @@ impl CliCommand for ConfigCommand {
             "validate" => config::validate(ctx),
             "show" => config::show(ctx),
             "init" => config::init(ctx, sub_matches),
+            "set" => {
+                let key = sub_matches
+                    .get_one::<String>("key")
+                    .expect("key is required");
+                let value = sub_matches
+                    .get_one::<String>("value")
+                    .expect("value is required");
+                config::set(ctx, key, value)
+            }
             other => Err(NestError::command(format!("unknown config subcommand: {other}"))),
         }
     }

@@ -17,8 +17,13 @@
     "@fortawesome/free-solid-svg-icons": "^7.3.0",
     "@fortawesome/react-fontawesome": "^3.3.1",
     "@tauri-apps/api": "^2.4.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.468.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.4.0",

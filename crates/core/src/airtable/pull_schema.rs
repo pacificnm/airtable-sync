@@ -31,17 +31,24 @@ pub struct PullSchemaResult {
 
 /// Downloads Airtable schema metadata into SQLite.
 pub fn pull_schema(ctx: &AppContext) -> NestResult<()> {
-    let validated = ensure_valid_config(ctx)?;
-
     let globals = ctx.service::<CliGlobals>().ok();
     let quiet = globals.as_ref().is_some_and(|globals| globals.quiet);
     let json = globals.as_ref().is_some_and(|globals| globals.json);
 
+    let result = compute_pull_schema(ctx, quiet)?;
+    print_pull_schema_success(&result, json, quiet)
+}
+
+/// Downloads Airtable schema metadata into SQLite, returning the structured
+/// result without printing. Shared by [`pull_schema`] and `setup init`.
+pub(crate) fn compute_pull_schema(ctx: &AppContext, quiet: bool) -> NestResult<PullSchemaResult> {
+    let validated = ensure_valid_config(ctx)?;
+
     let mut warnings = Vec::new();
 
     if !quiet {
-        for warning in validated.warnings {
-            print_warning(&warning);
+        for warning in &validated.warnings {
+            print_warning(warning);
         }
     }
 
@@ -58,14 +65,12 @@ pub fn pull_schema(ctx: &AppContext) -> NestResult<()> {
         .replace_schema_for_pull(&tables, &fields)
         .map_err(NestError::from)?;
 
-    let result = PullSchemaResult {
+    Ok(PullSchemaResult {
         base_id: validated.app.airtable.base_id.clone(),
         tables_updated: stats.tables_updated,
         fields_upserted: stats.fields_upserted,
         warnings,
-    };
-
-    print_pull_schema_success(&result, json, quiet)
+    })
 }
 
 fn fetch_base_schema(

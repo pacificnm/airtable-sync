@@ -8,6 +8,7 @@ mod db;
 mod group;
 mod mapping;
 mod report;
+mod setup;
 mod spec;
 mod sync;
 mod version;
@@ -20,6 +21,7 @@ pub use db::DbCommand;
 pub use group::GroupCommand;
 pub use mapping::MappingCommand;
 pub use report::ReportCommand;
+pub use setup::SetupCommand;
 pub use spec::{CommandGroupSpec, SubcommandSpec, COMMAND_GROUPS};
 pub use sync::SyncCommand;
 pub use version::VersionCommand;
@@ -43,6 +45,8 @@ pub fn register_commands(mut app: nest_cli::CliApp) -> nest_cli::CliApp {
             app = app.command(SyncCommand);
         } else if spec.name == "report" {
             app = app.command(ReportCommand);
+        } else if spec.name == "setup" {
+            app = app.command(SetupCommand);
         } else if spec.name == "version" {
             app = app.command(VersionCommand);
         } else {

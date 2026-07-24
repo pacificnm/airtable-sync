@@ -8,7 +8,12 @@
 /// The plugin identifier must be hyphenated (`airtable-sync`) — Tauri ACL
 /// identifiers reject underscores. Command names may keep underscores; they are
 /// normalized to `allow-airtable-sync-run` etc.
-const AIRTABLE_SYNC_COMMANDS: &[&str] = &["airtable_sync_run", "airtable_sync_command_groups"];
+const AIRTABLE_SYNC_COMMANDS: &[&str] = &[
+    "airtable_sync_run",
+    "airtable_sync_command_groups",
+    "airtable_sync_docs_list",
+    "airtable_sync_docs_read",
+];
 
 fn main() {
     tauri_build::try_build(

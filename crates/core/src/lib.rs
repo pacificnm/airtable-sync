@@ -17,6 +17,7 @@ pub mod db;
 pub mod mapping;
 pub mod gui;
 pub mod report;
+pub mod setup;
 pub mod sync;
 
 mod app;

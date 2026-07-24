@@ -37,6 +37,8 @@ pub struct AirtableTableSummary {
     pub allow_update: bool,
     /// Number of cached fields for this table.
     pub field_count: usize,
+    /// SQLite UTC datetime of the last successful `sync apply` for this table, if any.
+    pub last_synced_at: Option<String>,
 }
 
 /// One row in `airtable_fields`.
@@ -218,7 +220,7 @@ impl SchemaStore {
         self.db.with_connection(|conn| {
             let mut stmt = sqlite_result(conn.prepare(
                 "SELECT t.name, t.table_id, t.enabled, t.allow_create, t.allow_update,
-                        COUNT(f.id) AS field_count
+                        COUNT(f.id) AS field_count, t.last_synced_at
                  FROM airtable_tables t
                  LEFT JOIN airtable_fields f ON f.table_id = t.table_id
                  GROUP BY t.id
@@ -232,6 +234,7 @@ impl SchemaStore {
                     allow_create: row.get::<_, i32>(3)? != 0,
                     allow_update: row.get::<_, i32>(4)? != 0,
                     field_count: row.get::<_, i64>(5)? as usize,
+                    last_synced_at: row.get(6)?,
                 })
             }))?;
             let mut tables = Vec::new();
@@ -430,6 +433,17 @@ impl SchemaStore {
             Ok(rows_affected > 0)
         })
     }
+
+    /// Stamps `last_synced_at` on one table with the current UTC time.
+    pub fn mark_table_synced(&self, table_id: &str) -> DataResult<bool> {
+        self.db.with_connection(|conn| {
+            let rows_affected = sqlite_result(conn.execute(
+                "UPDATE airtable_tables SET last_synced_at = datetime('now') WHERE table_id = ?1",
+                rusqlite::params![table_id],
+            ))?;
+            Ok(rows_affected > 0)
+        })
+    }
 }
 
 #[cfg(test)]
@@ -438,10 +452,14 @@ mod tests {
     use nest_data_sqlite::SqliteConfig;
 
     const SCHEMA_SQL: &str = include_str!("../../../../../schema/airtable-sync.sql");
+    const LAST_SYNCED_SQL: &str =
+        include_str!("../../../../../schema/migrations/003_last_synced.sql");
 
     fn memory_store() -> SchemaStore {
         let db = SqliteConnection::open(&SqliteConfig::memory()).unwrap();
         db.with_connection(|conn| sqlite_result(conn.execute_batch(SCHEMA_SQL)))
+            .unwrap();
+        db.with_connection(|conn| sqlite_result(conn.execute_batch(LAST_SYNCED_SQL)))
             .unwrap();
         SchemaStore::new(db)
     }

@@ -8,38 +8,117 @@ use nest_core::AppContext;
 use nest_error::{NestError, NestResult};
 use nest_validation::codes::NEST_VALIDATION_FAILED;
 use nest_validation::{ValidationError, ValidationIssue};
+use serde::Serialize;
 
 use crate::config::{resolve_config_path, AppConfig};
 use crate::db::{open_database, SchemaStore};
 
 const LOG_LEVELS: &[&str] = &["trace", "debug", "info", "warn", "error"];
 
+/// One structured validation issue in `config validate --json` output.
+#[derive(Debug, Clone, Serialize)]
+pub struct ConfigIssueView {
+    /// Config field path when applicable.
+    pub field: Option<String>,
+    /// Human-readable message.
+    pub message: String,
+    /// Optional remediation hint.
+    pub help: Option<String>,
+    /// `error` or `warning`.
+    pub severity: String,
+}
+
+/// JSON response for `config validate --json`.
+#[derive(Debug, Serialize)]
+pub struct ConfigValidateResult {
+    /// Whether configuration has no blocking issues.
+    pub valid: bool,
+    /// Configured table count.
+    pub table_count: usize,
+    /// Tables with `sync = true`.
+    pub sync_count: usize,
+    /// Blocking issues.
+    pub errors: Vec<ConfigIssueView>,
+    /// Non-blocking issues.
+    pub warnings: Vec<ConfigIssueView>,
+}
+
 /// Validates the loaded application configuration.
 pub fn validate(ctx: &AppContext) -> NestResult<()> {
-    let validated = ensure_valid_config(ctx)?;
+    let globals = ctx.service::<CliGlobals>().ok();
+    let quiet = globals.as_ref().is_some_and(|globals| globals.quiet);
+    let json = globals.as_ref().is_some_and(|globals| globals.json);
 
-    let quiet = ctx
-        .service::<CliGlobals>()
-        .map(|globals| globals.quiet)
-        .unwrap_or(false);
+    let config = ctx.service::<ConfigService>()?;
+    let app = AppConfig::from_service(config)?;
+    let issues = collect_validation_issues(config, &app);
 
-    if !quiet {
-        for warning in validated.warnings {
-            print_warning(&warning);
-        }
+    let blocking: Vec<_> = issues.iter().filter(|issue| issue.is_blocking()).cloned().collect();
+    let warnings: Vec<_> = issues.iter().filter(|issue| !issue.is_blocking()).cloned().collect();
 
-        let table_count = validated.app.airtable.tables.len();
-        let sync_count = validated
-            .app
-            .airtable
-            .tables
-            .values()
-            .filter(|table| table.sync)
-            .count();
-        println!("Configuration valid ({table_count} tables, {sync_count} enabled for sync)");
+    let result = ConfigValidateResult {
+        valid: blocking.is_empty(),
+        table_count: app.airtable.tables.len(),
+        sync_count: app.airtable.tables.values().filter(|table| table.sync).count(),
+        errors: blocking.iter().map(issue_view).collect(),
+        warnings: warnings.iter().map(issue_view).collect(),
+    };
+
+    print_validate_result(&result, json, quiet)?;
+
+    if result.valid {
+        Ok(())
+    } else {
+        Err(fail_validation(blocking))
+    }
+}
+
+pub(crate) fn issue_view(issue: &ValidationIssue) -> ConfigIssueView {
+    ConfigIssueView {
+        field: issue.field.as_ref().map(|path| path.as_str().to_string()),
+        message: issue.message.clone(),
+        help: issue.help.clone(),
+        severity: if issue.is_blocking() {
+            "error".to_string()
+        } else {
+            "warning".to_string()
+        },
+    }
+}
+
+fn print_validate_result(result: &ConfigValidateResult, json: bool, quiet: bool) -> NestResult<()> {
+    if json {
+        let payload = serde_json::to_string_pretty(result).map_err(|error| {
+            NestError::data(format!("failed to serialize config validate result: {error}"))
+        })?;
+        println!("{payload}");
+        return Ok(());
+    }
+
+    if quiet {
+        return Ok(());
+    }
+
+    for warning in &result.warnings {
+        print_issue_view(warning);
+    }
+
+    if result.valid {
+        println!(
+            "Configuration valid ({} tables, {} enabled for sync)",
+            result.table_count, result.sync_count
+        );
     }
 
     Ok(())
+}
+
+fn print_issue_view(issue: &ConfigIssueView) {
+    if let Some(field) = &issue.field {
+        println!("warning: {}: {}", field, issue.message);
+    } else {
+        println!("warning: {}", issue.message);
+    }
 }
 
 /// Loaded configuration that passed full validation.
@@ -592,5 +671,34 @@ mod tests {
         let error = fail_validation(issues);
         assert!(error.message().contains("csv.location_data_file"));
         assert!(error.message().contains("/tmp/location.csv"));
+    }
+
+    #[test]
+    fn issue_view_maps_blocking_issue_to_error_severity() {
+        let issue = ValidationIssue::field_error(
+            "airtable.token",
+            "config.airtable.token.missing",
+            "Airtable token is required",
+        )
+        .with_help("Set token in [airtable].");
+
+        let view = issue_view(&issue);
+        assert_eq!(view.field.as_deref(), Some("airtable.token"));
+        assert_eq!(view.message, "Airtable token is required");
+        assert_eq!(view.help.as_deref(), Some("Set token in [airtable]."));
+        assert_eq!(view.severity, "error");
+    }
+
+    #[test]
+    fn issue_view_maps_non_blocking_issue_to_warning_severity() {
+        let issue = ValidationIssue::field_warning(
+            "airtable.tables.assets.primary_key_field",
+            "config.airtable.tables.primary_key_field.missing",
+            "primary_key_field is not set",
+        );
+
+        let view = issue_view(&issue);
+        assert_eq!(view.severity, "warning");
+        assert!(view.help.is_none());
     }
 }

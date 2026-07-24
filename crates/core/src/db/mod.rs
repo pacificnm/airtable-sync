@@ -28,6 +28,6 @@ pub use change_plan_store::{
 };
 pub use common::{
     apply_pending_migrations, open_database, registered_migrations, DbMigrateResult,
-    CHANGE_PLANS_MIGRATION_ID, MIGRATION_ID,
+    CHANGE_PLANS_MIGRATION_ID, LAST_SYNCED_MIGRATION_ID, MIGRATION_ID,
 };
 pub(crate) use common::absolute_path;

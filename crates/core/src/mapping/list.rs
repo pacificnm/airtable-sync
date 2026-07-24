@@ -55,7 +55,19 @@ pub struct MappingListSummary {
     pub sync_enabled: usize,
 }
 
-/// JSON response for `mapping list` with `--json`.
+/// One table's mapping state — the shared shape for both a single-table
+/// lookup and each entry of an all-tables listing.
+#[derive(Debug, Clone, Serialize)]
+pub struct MappingListTableResult {
+    /// Cached table metadata.
+    pub table: MappingListTableView,
+    /// Mapping summary counts.
+    pub summary: MappingListSummary,
+    /// Mappable fields ordered by name.
+    pub fields: Vec<MappingListFieldView>,
+}
+
+/// JSON response for `mapping list <table>` with `--json`.
 #[derive(Debug, Serialize)]
 pub struct MappingListResult {
     /// Absolute path to the SQLite database file.
@@ -70,12 +82,21 @@ pub struct MappingListResult {
     pub fields: Vec<MappingListFieldView>,
 }
 
-/// Lists field mapping state for one configured table from SQLite.
+/// JSON response for `mapping list` with no table (every cached table) with `--json`.
+#[derive(Debug, Serialize)]
+pub struct MappingListAllResult {
+    /// Absolute path to the SQLite database file.
+    pub database_path: PathBuf,
+    /// Airtable base id from config.
+    pub base_id: String,
+    /// Per-table mapping state, ordered by table name.
+    pub tables: Vec<MappingListTableResult>,
+}
+
+/// Lists field mapping state from SQLite — for one configured table when
+/// `table` is given, or every cached table when it's omitted.
 pub fn list_mappings(ctx: &AppContext, matches: &ArgMatches) -> NestResult<()> {
-    let table_name = matches
-        .get_one::<String>("table")
-        .map(String::as_str)
-        .ok_or_else(|| NestError::command("missing table name"))?;
+    let table_name = matches.get_one::<String>("table").map(String::as_str);
 
     let validated = ensure_valid_config(ctx)?;
 
@@ -84,8 +105,8 @@ pub fn list_mappings(ctx: &AppContext, matches: &ArgMatches) -> NestResult<()> {
     let json = globals.as_ref().is_some_and(|globals| globals.json);
 
     if !quiet {
-        for warning in validated.warnings {
-            print_warning(&warning);
+        for warning in &validated.warnings {
+            print_warning(warning);
         }
     }
 
@@ -95,30 +116,63 @@ pub fn list_mappings(ctx: &AppContext, matches: &ArgMatches) -> NestResult<()> {
 
     let db = open_database(&database_path)?;
     let store = SchemaStore::new(db);
+    let base_id = &validated.app.airtable.base_id;
 
-    let Some(table) = store
-        .find_table_by_name(table_name)
-        .map_err(NestError::from)?
-    else {
-        return Err(NestError::data(format!(
-            "table `{table_name}` not in cache — run `airtable pull-schema` or `airtable list-tables`"
-        )));
-    };
+    match table_name {
+        Some(name) => {
+            let Some(table) = store.find_table_by_name(name).map_err(NestError::from)? else {
+                return Err(NestError::data(format!(
+                    "table `{name}` not in cache — run `airtable pull-schema` or `airtable list-tables`"
+                )));
+            };
+            let entry = build_table_result(&store, &table.name, &table.table_id, table.enabled)?;
+            let result = MappingListResult {
+                database_path: absolute_path(&database_path),
+                base_id: base_id.clone(),
+                table: entry.table,
+                summary: entry.summary,
+                fields: entry.fields,
+            };
+            print_mapping_list_success(&result, json, quiet)
+        }
+        None => {
+            let summaries = store.list_tables_summary().map_err(NestError::from)?;
+            let mut tables = Vec::with_capacity(summaries.len());
+            for summary in &summaries {
+                tables.push(build_table_result(
+                    &store,
+                    &summary.name,
+                    &summary.table_id,
+                    summary.enabled,
+                )?);
+            }
+            let result = MappingListAllResult {
+                database_path: absolute_path(&database_path),
+                base_id: base_id.clone(),
+                tables,
+            };
+            print_mapping_list_all_success(&result, json, quiet)
+        }
+    }
+}
 
-    let fields = store
-        .list_mappable_fields(&table.table_id)
-        .map_err(NestError::from)?;
-
+fn build_table_result(
+    store: &SchemaStore,
+    name: &str,
+    table_id: &str,
+    enabled: bool,
+) -> NestResult<MappingListTableResult> {
+    let fields = store.list_mappable_fields(table_id).map_err(NestError::from)?;
     let summary = summarize_fields(&fields);
-    let result = MappingListResult {
-        database_path: absolute_path(&database_path),
-        base_id: validated.app.airtable.base_id.clone(),
-        table: MappingListTableView::from(table),
+    Ok(MappingListTableResult {
+        table: MappingListTableView {
+            name: name.to_string(),
+            table_id: table_id.to_string(),
+            enabled,
+        },
         summary,
         fields: fields.into_iter().map(MappingListFieldView::from).collect(),
-    };
-
-    print_mapping_list_success(&result, json, quiet)
+    })
 }
 
 impl From<AirtableTableRow> for MappingListTableView {
@@ -184,23 +238,67 @@ fn print_mapping_list_success(
         result.summary.fields_total, result.summary.mapped, result.summary.sync_enabled
     );
 
-    if result.fields.is_empty() {
-        println!("No mappable fields in cache — run `airtable pull-schema` first.");
-        return Ok(());
-    }
+    print_fields_table(&result.table.name, &result.fields);
 
     if result.summary.mapped == 0 {
         println!("No CSV mappings yet — run `mapping auto` or `mapping set`.");
+    }
+
+    Ok(())
+}
+
+fn print_mapping_list_all_success(
+    result: &MappingListAllResult,
+    json: bool,
+    quiet: bool,
+) -> NestResult<()> {
+    if json {
+        let payload = serde_json::to_string_pretty(result).map_err(|error| {
+            NestError::data(format!("failed to serialize mapping list result: {error}"))
+        })?;
+        println!("{payload}");
+        return Ok(());
+    }
+
+    if quiet {
+        return Ok(());
+    }
+
+    if result.tables.is_empty() {
+        println!("No tables in cache — run `airtable pull-schema` first.");
+        return Ok(());
+    }
+
+    println!("Field mappings for base {}:", result.base_id);
+    for entry in &result.tables {
+        println!(
+            "\n`{}` ({}): {} mappable field(s), {} mapped, {} sync enabled",
+            entry.table.name,
+            entry.table.table_id,
+            entry.summary.fields_total,
+            entry.summary.mapped,
+            entry.summary.sync_enabled
+        );
+        print_fields_table(&entry.table.name, &entry.fields);
+    }
+
+    Ok(())
+}
+
+fn print_fields_table(table_name: &str, fields: &[MappingListFieldView]) {
+    if fields.is_empty() {
+        println!("No mappable fields in cache — run `airtable pull-schema` first.");
+        return;
     }
 
     println!(
         "{:<20} {:<20} {:<12} {:<16} {:<6} {}",
         "table", "field_name", "csv_field", "csv_file", "sync", "key"
     );
-    for field in &result.fields {
+    for field in fields {
         println!(
             "{:<20} {:<20} {:<12} {:<16} {:<6} {}",
-            result.table.name,
+            table_name,
             field.field_name,
             field.csv_field.as_deref().unwrap_or("-"),
             field.csv_file.as_deref().unwrap_or("-"),
@@ -208,8 +306,6 @@ fn print_mapping_list_success(
             yes_no(field.is_key)
         );
     }
-
-    Ok(())
 }
 
 fn yes_no(value: bool) -> &'static str {

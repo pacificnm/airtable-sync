@@ -44,6 +44,10 @@ pub const COMMAND_GROUPS: &[CommandGroupSpec] = &[
                 name: "init",
                 about: "Create a default config.toml",
             },
+            SubcommandSpec {
+                name: "set",
+                about: "Set one config.toml key, preserving formatting",
+            },
         ],
     },
     CommandGroupSpec {
@@ -88,6 +92,10 @@ pub const COMMAND_GROUPS: &[CommandGroupSpec] = &[
                 name: "list-fields",
                 about: "List fields for a table",
             },
+            SubcommandSpec {
+                name: "records",
+                about: "Fetch every record for one table",
+            },
         ],
     },
     CommandGroupSpec {
@@ -105,6 +113,10 @@ pub const COMMAND_GROUPS: &[CommandGroupSpec] = &[
             SubcommandSpec {
                 name: "validate",
                 about: "Validate CSV structure",
+            },
+            SubcommandSpec {
+                name: "list-headers",
+                about: "List cached CSV column headers by file",
             },
         ],
     },

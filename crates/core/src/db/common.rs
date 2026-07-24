@@ -17,8 +17,13 @@ pub const MIGRATION_ID: &str = "001_initial_schema";
 /// Migration id for change plan tables.
 pub const CHANGE_PLANS_MIGRATION_ID: &str = "002_change_plans";
 
+/// Migration id for the `airtable_tables.last_synced_at` column.
+pub const LAST_SYNCED_MIGRATION_ID: &str = "003_last_synced";
+
 const CHANGE_PLANS_SQL: &str =
     include_str!("../../../../schema/migrations/002_change_plans.sql");
+
+const LAST_SYNCED_SQL: &str = include_str!("../../../../schema/migrations/003_last_synced.sql");
 
 /// JSON response for successful `db init` with `--json`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -113,6 +118,11 @@ pub fn registered_migrations(schema_path: &Path) -> NestResult<Vec<Box<dyn Migra
             CHANGE_PLANS_SQL,
             change_plans_down_sql(),
         )),
+        Box::new(SqlMigration::new(
+            LAST_SYNCED_MIGRATION_ID,
+            LAST_SYNCED_SQL,
+            last_synced_down_sql(),
+        )),
     ])
 }
 
@@ -197,6 +207,10 @@ fn change_plans_down_sql() -> String {
     .join("\n")
 }
 
+fn last_synced_down_sql() -> String {
+    "ALTER TABLE airtable_tables DROP COLUMN last_synced_at;".to_string()
+}
+
 pub(crate) fn absolute_path(path: &Path) -> PathBuf {
     if path.is_absolute() {
         return path.to_path_buf();
@@ -212,7 +226,17 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
 
-    const SCHEMA_SQL: &str = "CREATE TABLE notes (id INTEGER PRIMARY KEY, title TEXT NOT NULL);";
+    const SCHEMA_SQL: &str = "
+        CREATE TABLE notes (id INTEGER PRIMARY KEY, title TEXT NOT NULL);
+        CREATE TABLE airtable_tables (
+          id INTEGER PRIMARY KEY,
+          name TEXT NOT NULL,
+          table_id TEXT NOT NULL UNIQUE,
+          enabled BOOLEAN NOT NULL DEFAULT 1,
+          allow_create BOOLEAN NOT NULL DEFAULT 0,
+          allow_update BOOLEAN NOT NULL DEFAULT 1
+        );
+    ";
 
     #[test]
     fn apply_pending_migrations_applies_registered_migration() {
@@ -226,11 +250,19 @@ mod tests {
         assert!(db_path.is_file());
         assert_eq!(
             result.applied,
-            vec![MIGRATION_ID.to_string(), CHANGE_PLANS_MIGRATION_ID.to_string()]
+            vec![
+                MIGRATION_ID.to_string(),
+                CHANGE_PLANS_MIGRATION_ID.to_string(),
+                LAST_SYNCED_MIGRATION_ID.to_string(),
+            ]
         );
         assert_eq!(
             result.all_applied,
-            vec![MIGRATION_ID.to_string(), CHANGE_PLANS_MIGRATION_ID.to_string()]
+            vec![
+                MIGRATION_ID.to_string(),
+                CHANGE_PLANS_MIGRATION_ID.to_string(),
+                LAST_SYNCED_MIGRATION_ID.to_string(),
+            ]
         );
         assert!(result.database_created);
     }
@@ -248,7 +280,11 @@ mod tests {
         assert!(result.applied.is_empty());
         assert_eq!(
             result.all_applied,
-            vec![MIGRATION_ID.to_string(), CHANGE_PLANS_MIGRATION_ID.to_string()]
+            vec![
+                MIGRATION_ID.to_string(),
+                CHANGE_PLANS_MIGRATION_ID.to_string(),
+                LAST_SYNCED_MIGRATION_ID.to_string(),
+            ]
         );
         assert!(!result.database_created);
     }

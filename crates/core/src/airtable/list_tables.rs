@@ -25,6 +25,8 @@ pub struct ListTablesTableView {
     pub allow_update: bool,
     /// Number of cached fields for this table.
     pub field_count: usize,
+    /// SQLite UTC datetime of the last successful `sync apply` for this table, if any.
+    pub last_synced_at: Option<String>,
 }
 
 /// JSON response for `airtable list-tables` with `--json`.
@@ -79,6 +81,7 @@ impl From<AirtableTableSummary> for ListTablesTableView {
             allow_create: table.allow_create,
             allow_update: table.allow_update,
             field_count: table.field_count,
+            last_synced_at: table.last_synced_at,
         }
     }
 }
@@ -106,14 +109,18 @@ fn print_list_tables_success(result: &ListTablesResult, json: bool, quiet: bool)
         result.base_id,
         result.database_path.display()
     );
-    println!("{:<20} {:<16} {:<8} {}", "name", "table_id", "enabled", "fields");
+    println!(
+        "{:<20} {:<16} {:<8} {:<7} {}",
+        "name", "table_id", "enabled", "fields", "last_synced"
+    );
     for table in &result.tables {
         println!(
-            "{:<20} {:<16} {:<8} {}",
+            "{:<20} {:<16} {:<8} {:<7} {}",
             table.name,
             table.table_id,
             yes_no(table.enabled),
-            table.field_count
+            table.field_count,
+            table.last_synced_at.as_deref().unwrap_or("never")
         );
     }
     Ok(())

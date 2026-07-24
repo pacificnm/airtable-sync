@@ -31,7 +31,7 @@ impl CliCommand for AirtableCommand {
             .arg_required_else_help(true);
 
         for sub in spec.subcommands {
-            let sub_cmd = if sub.name == "list-fields" {
+            let sub_cmd = if sub.name == "list-fields" || sub.name == "records" {
                 Command::new(sub.name)
                     .about(sub.about)
                     .arg(
@@ -58,6 +58,7 @@ impl CliCommand for AirtableCommand {
             "pull-schema" => airtable::pull_schema(ctx),
             "list-tables" => airtable::list_tables(ctx),
             "list-fields" => airtable::list_fields(ctx, sub_matches),
+            "records" => airtable::records(ctx, sub_matches),
             other => Err(NestError::command(format!(
                 "airtable subcommand `{other}` is not yet implemented"
             ))),

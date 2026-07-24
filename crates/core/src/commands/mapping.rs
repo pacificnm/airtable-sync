@@ -32,13 +32,11 @@ impl CliCommand for MappingCommand {
 
         for sub in spec.subcommands {
             let sub_cmd = if sub.name == "list" {
-                Command::new(sub.name)
-                    .about(sub.about)
-                    .arg(
-                        Arg::new("table")
-                            .required(true)
-                            .help("Logical table name from config (see `airtable list-tables`)"),
-                    )
+                Command::new(sub.name).about(sub.about).arg(
+                    Arg::new("table")
+                        .required(false)
+                        .help("Logical table name from config; omit to list every cached table"),
+                )
             } else if sub.name == "disable" {
                 Command::new(sub.name)
                     .about(sub.about)
@@ -129,6 +127,7 @@ impl CliCommand for MappingCommand {
         })?;
 
         match subcommand {
+            "auto" => mapping::auto_map(ctx),
             "list" => mapping::list_mappings(ctx, sub_matches),
             "set" => mapping::set_mapping(ctx, sub_matches),
             "remove" => mapping::remove_mapping(ctx, sub_matches),

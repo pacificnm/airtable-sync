@@ -73,6 +73,7 @@ impl CliCommand for CsvCommand {
             "import-headers" => csv::import_headers(ctx),
             "preview" => csv::preview(ctx, sub_matches),
             "validate" => csv::validate(ctx, sub_matches),
+            "list-headers" => csv::list_headers(ctx),
             other => Err(NestError::command(format!(
                 "csv subcommand `{other}` is not yet implemented"
             ))),

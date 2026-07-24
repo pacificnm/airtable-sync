@@ -82,13 +82,14 @@ pub struct SyncApplyResult {
 struct PendingUpdate {
     operation_id: i64,
     table_name: String,
+    table_id: String,
     record_key: String,
     record_id: String,
     fields: AirtableFields,
 }
 
 enum ApplyOutcome {
-    Applied(i64),
+    Applied { operation_id: i64, table_id: String },
     Failed {
         operation_id: i64,
         table: String,
@@ -179,16 +180,21 @@ pub fn sync_apply(ctx: &AppContext, matches: &ArgMatches) -> NestResult<()> {
 
             let mut outcomes = Vec::new();
             for update in pending_updates {
-                match client
-                    .update_record(&update.table_name, &update.record_id, update.fields)
-                    .await
-                {
-                    Ok(_) => outcomes.push(ApplyOutcome::Applied(update.operation_id)),
+                let PendingUpdate {
+                    operation_id,
+                    table_name,
+                    table_id,
+                    record_key,
+                    record_id,
+                    fields,
+                } = update;
+                match client.update_record(&table_name, &record_id, fields).await {
+                    Ok(_) => outcomes.push(ApplyOutcome::Applied { operation_id, table_id }),
                     Err(error) => {
                         outcomes.push(ApplyOutcome::Failed {
-                            operation_id: update.operation_id,
-                            table: update.table_name,
-                            key: update.record_key,
+                            operation_id,
+                            table: table_name,
+                            key: record_key,
                             message: error.message().to_string(),
                         });
                         if !continue_on_error {
@@ -200,13 +206,15 @@ pub fn sync_apply(ctx: &AppContext, matches: &ArgMatches) -> NestResult<()> {
             Ok(outcomes)
         })?;
 
+        let mut synced_table_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
         for outcome in outcomes {
             match outcome {
-                ApplyOutcome::Applied(operation_id) => {
+                ApplyOutcome::Applied { operation_id, table_id } => {
                     store
                         .mark_operation_applied(operation_id)
                         .map_err(NestError::from)?;
                     summary.applied += 1;
+                    synced_table_ids.insert(table_id);
                 }
                 ApplyOutcome::Failed {
                     operation_id,
@@ -226,6 +234,12 @@ pub fn sync_apply(ctx: &AppContext, matches: &ArgMatches) -> NestResult<()> {
                     });
                 }
             }
+        }
+
+        for table_id in &synced_table_ids {
+            schema_store
+                .mark_table_synced(table_id)
+                .map_err(NestError::from)?;
         }
     }
 
@@ -272,12 +286,16 @@ fn classify_operation(
         ));
     }
 
-    let allow_update = schema_store
+    let table = schema_store
         .find_table_by_name(&operation.table_name)
         .map_err(|error| error.to_string())?
-        .map(|table| table.allow_update)
-        .unwrap_or(true);
-    if !allow_update {
+        .ok_or_else(|| {
+            format!(
+                "table `{}` not in cache — run `airtable pull-schema` first",
+                operation.table_name
+            )
+        })?;
+    if !table.allow_update {
         return Err(format!(
             "updates are disabled for table `{}`",
             operation.table_name
@@ -291,6 +309,7 @@ fn classify_operation(
     Ok(PendingUpdate {
         operation_id: operation.operation_id,
         table_name: operation.table_name.clone(),
+        table_id: table.table_id,
         record_key: operation.record_key.clone(),
         record_id,
         fields: fields_from_changes(&operation.field_changes),

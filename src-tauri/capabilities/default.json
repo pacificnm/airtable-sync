@@ -3,5 +3,13 @@
   "identifier": "default",
   "description": "Default capabilities for the Airtable Sync desktop host",
   "windows": ["main"],
-  "permissions": ["core:default", "airtable-sync:default"]
+  "permissions": [
+    "core:default",
+    "airtable-sync:default",
+    "core:window:allow-close",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-is-maximized",
+    "core:window:allow-start-dragging"
+  ]
 }

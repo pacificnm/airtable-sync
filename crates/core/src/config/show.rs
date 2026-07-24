@@ -9,38 +9,82 @@ use nest_core::AppContext;
 use nest_error::{NestError, NestResult};
 use serde::Serialize;
 
-use crate::config::validate::{ensure_valid_config, print_warning};
+use crate::config::validate::{collect_validation_issues, fail_validation, issue_view, ConfigIssueView};
 use crate::config::{resolve_config_path, AppConfig};
 
 const REDACTED: &str = "(set)";
 const NOT_SET: &str = "(not set)";
 
-/// Displays the loaded configuration after validation succeeds.
-pub fn show(ctx: &AppContext) -> NestResult<()> {
-    let validated = ensure_valid_config(ctx)?;
+/// JSON response for `config show --json`.
+#[derive(Debug, Serialize)]
+pub struct ConfigShowResult {
+    /// Whether configuration has no blocking issues.
+    pub valid: bool,
+    /// Redacted configuration view (built regardless of validity).
+    pub config: ConfigShowView,
+    /// Blocking issues.
+    pub errors: Vec<ConfigIssueView>,
+    /// Non-blocking issues.
+    pub warnings: Vec<ConfigIssueView>,
+}
 
+/// Displays the loaded configuration, along with any validation issues.
+pub fn show(ctx: &AppContext) -> NestResult<()> {
     let globals = ctx.service::<CliGlobals>().ok();
     let quiet = globals.as_ref().is_some_and(|globals| globals.quiet);
     let json = globals.as_ref().is_some_and(|globals| globals.json);
 
-    if !quiet {
-        for warning in validated.warnings {
-            print_warning(&warning);
-        }
-    }
+    let config = ctx.service::<ConfigService>()?;
+    let app = AppConfig::from_service(config)?;
+    let issues = collect_validation_issues(config, &app);
 
+    let blocking: Vec<_> = issues.iter().filter(|issue| issue.is_blocking()).cloned().collect();
+    let warnings: Vec<_> = issues.iter().filter(|issue| !issue.is_blocking()).cloned().collect();
+
+    let result = ConfigShowResult {
+        valid: blocking.is_empty(),
+        config: build_show_view(config, &app),
+        errors: blocking.iter().map(issue_view).collect(),
+        warnings: warnings.iter().map(issue_view).collect(),
+    };
+
+    print_show_result(&result, json, quiet)?;
+
+    if result.valid {
+        Ok(())
+    } else {
+        Err(fail_validation(blocking))
+    }
+}
+
+fn print_show_result(result: &ConfigShowResult, json: bool, quiet: bool) -> NestResult<()> {
     if json {
-        let view = build_show_view(&validated.config, &validated.app);
-        let payload = serde_json::to_string_pretty(&view).map_err(|error| {
+        let payload = serde_json::to_string_pretty(result).map_err(|error| {
             NestError::data(format!("failed to serialize configuration: {error}"))
         })?;
         println!("{payload}");
-    } else if !quiet {
-        let view = build_show_view(&validated.config, &validated.app);
-        println!("{}", format_show_human(&view));
+        return Ok(());
     }
 
+    if quiet {
+        return Ok(());
+    }
+
+    for warning in &result.warnings {
+        print_issue_view(warning);
+    }
+
+    println!("{}", format_show_human(&result.config));
+
     Ok(())
+}
+
+fn print_issue_view(issue: &ConfigIssueView) {
+    if let Some(field) = &issue.field {
+        println!("warning: {}: {}", field, issue.message);
+    } else {
+        println!("warning: {}", issue.message);
+    }
 }
 
 /// Redacted configuration view for display and JSON output.

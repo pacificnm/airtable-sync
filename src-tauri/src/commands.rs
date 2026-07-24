@@ -7,7 +7,9 @@
 
 use airtable_sync_core::{CommandDispatch, DispatchResult, COMMAND_GROUPS};
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, State};
+
+use crate::docs::{self, DocEntry};
 
 /// Serializable outcome of a dispatched command.
 #[derive(Debug, Serialize)]
@@ -56,6 +58,8 @@ pub fn airtable_sync_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R
         .invoke_handler(tauri::generate_handler![
             airtable_sync_run,
             airtable_sync_command_groups,
+            airtable_sync_docs_list,
+            airtable_sync_docs_read,
         ])
         .build()
 }
@@ -101,4 +105,23 @@ async fn airtable_sync_command_groups() -> Result<Vec<GroupInfo>, String> {
         })
         .collect();
     Ok(groups)
+}
+
+/// Lists the Help viewer's documentation entries (`docs/**/*.md`).
+#[tauri::command]
+async fn airtable_sync_docs_list<R: tauri::Runtime>(
+    app: AppHandle<R>,
+) -> Result<Vec<DocEntry>, String> {
+    let root = docs::resolve_root(&app);
+    docs::list(&root)
+}
+
+/// Reads one documentation file's raw Markdown, by path relative to the docs root.
+#[tauri::command]
+async fn airtable_sync_docs_read<R: tauri::Runtime>(
+    app: AppHandle<R>,
+    path: String,
+) -> Result<String, String> {
+    let root = docs::resolve_root(&app);
+    docs::read(&root, &path)
 }

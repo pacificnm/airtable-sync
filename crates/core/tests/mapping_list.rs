@@ -231,6 +231,62 @@ async fn mapping_list_fails_for_unknown_table() {
     assert_eq!(error.kind(), nest_error::NestErrorKind::Data);
 }
 
+#[tokio::test]
+async fn mapping_list_with_no_table_lists_every_cached_table() {
+    let _lock = test_lock();
+    let server = MockServer::start().await;
+    mount_meta_schema(&server).await;
+
+    let dir = tempdir().unwrap();
+    let meta_base_url = format!("{}/meta", server.uri());
+    let config_path = write_fixture(&dir, &meta_base_url);
+    init_database(&config_path);
+
+    cli_app()
+        .try_run_with([
+            "airtable-sync",
+            "--config",
+            config_path.to_str().unwrap(),
+            "airtable",
+            "pull-schema",
+        ])
+        .unwrap();
+
+    seed_mapping(&dir.path().join("data/app.db"));
+
+    // The ribbon's "List" button dispatches exactly this — no table argument.
+    cli_app()
+        .try_run_with([
+            "airtable-sync",
+            "--config",
+            config_path.to_str().unwrap(),
+            "--json",
+            "mapping",
+            "list",
+        ])
+        .unwrap();
+}
+
+#[test]
+fn mapping_list_with_no_table_succeeds_on_an_empty_cache() {
+    let _lock = test_lock();
+    let dir = tempdir().unwrap();
+    let config_path = write_fixture(&dir, "https://example.invalid/meta");
+    init_database(&config_path);
+
+    // No tables pulled yet — should list zero tables, not error, unlike the
+    // single-table form which requires the named table to already be cached.
+    cli_app()
+        .try_run_with([
+            "airtable-sync",
+            "--config",
+            config_path.to_str().unwrap(),
+            "mapping",
+            "list",
+        ])
+        .unwrap();
+}
+
 #[test]
 fn mapping_list_fails_when_database_missing() {
     let _lock = test_lock();

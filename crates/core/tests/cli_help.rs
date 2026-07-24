@@ -90,11 +90,3 @@ fn version_flag_prints_configured_version() {
         .try_run_with(["airtable-sync", "--version"])
         .unwrap();
 }
-
-#[test]
-fn setup_init_stub_runs() {
-    let _lock = test_lock();
-    cli_app()
-        .try_run_with(["airtable-sync", "setup", "init"])
-        .unwrap();
-}

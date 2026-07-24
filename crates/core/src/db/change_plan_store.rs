@@ -641,7 +641,17 @@ mod tests {
     use crate::db::{apply_pending_migrations, open_database};
     use tempfile::tempdir;
 
-    const SCHEMA_SQL: &str = "CREATE TABLE notes (id INTEGER PRIMARY KEY, title TEXT NOT NULL);";
+    const SCHEMA_SQL: &str = "
+        CREATE TABLE notes (id INTEGER PRIMARY KEY, title TEXT NOT NULL);
+        CREATE TABLE airtable_tables (
+          id INTEGER PRIMARY KEY,
+          name TEXT NOT NULL,
+          table_id TEXT NOT NULL UNIQUE,
+          enabled BOOLEAN NOT NULL DEFAULT 1,
+          allow_create BOOLEAN NOT NULL DEFAULT 0,
+          allow_update BOOLEAN NOT NULL DEFAULT 1
+        );
+    ";
 
     fn sample_operation(record_key: &str) -> ChangePlanOperation {
         ChangePlanOperation {

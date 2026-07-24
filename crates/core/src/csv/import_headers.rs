@@ -62,15 +62,23 @@ struct CsvSource<'a> {
 
 /// Imports CSV column headers from configured files into SQLite.
 pub fn import_headers(ctx: &AppContext) -> NestResult<()> {
-    let validated = ensure_valid_config(ctx)?;
-
     let globals = ctx.service::<CliGlobals>().ok();
     let quiet = globals.as_ref().is_some_and(|globals| globals.quiet);
     let json = globals.as_ref().is_some_and(|globals| globals.json);
 
+    let result = compute_import_headers(ctx, quiet)?;
+    print_import_headers_success(&result, json, quiet)
+}
+
+/// Imports CSV column headers from configured files into SQLite, returning
+/// the structured result without printing. Shared by [`import_headers`] and
+/// `setup init`.
+pub(crate) fn compute_import_headers(ctx: &AppContext, quiet: bool) -> NestResult<ImportHeadersResult> {
+    let validated = ensure_valid_config(ctx)?;
+
     if !quiet {
-        for warning in validated.warnings {
-            print_warning(&warning);
+        for warning in &validated.warnings {
+            print_warning(warning);
         }
     }
 
@@ -142,7 +150,7 @@ pub fn import_headers(ctx: &AppContext) -> NestResult<()> {
         fields: rows.into_iter().map(ImportHeadersFieldView::from).collect(),
     };
 
-    print_import_headers_success(&result, json, quiet)
+    Ok(result)
 }
 
 impl From<CsvFieldRow> for ImportHeadersFieldView {

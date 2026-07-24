@@ -4,7 +4,7 @@ Sync data between CSV sources and [Airtable](https://airtable.com), built on the
 
 This README is organized around the **user workflow** — from first-time setup through configuration, mapping, comparison, and synchronization. Commands are grouped by the step you are performing, not by implementation detail.
 
-> **Status:** Milestone 1 complete — full command tree and branded `--help`. **`config validate`**, **`config show`**, **`config init`**, **`db init`**, **`db reset`**, **`db schema`**, **`db migrate`**, **`airtable test`**, **`airtable pull-schema`**, **`airtable list-tables`**, **`airtable list-fields`**, **`csv import-headers`**, **`csv preview`**, **`csv validate`**, **`mapping list`**, **`mapping set`**, **`mapping remove`**, **`mapping enable`**, **`mapping disable`**, **`mapping report`**, **`compare table`**, **`compare all`**, **`sync dry-run`**, **`sync review`**, **`sync approve`**, **`sync deny`**, **`sync approve-all`**, **`sync deny-all`**, **`sync apply`**, **`report changes`**, **`report validation`**, **`report summary`**, and **`version`** are implemented; other commands are stubs.
+> **Status:** Milestone 1 complete — full command tree and branded `--help`. **`setup init`**, **`config validate`**, **`config show`**, **`config init`**, **`db init`**, **`db reset`**, **`db schema`**, **`db migrate`**, **`airtable test`**, **`airtable pull-schema`**, **`airtable list-tables`**, **`airtable list-fields`**, **`csv import-headers`**, **`csv preview`**, **`csv validate`**, **`mapping auto`**, **`mapping list`**, **`mapping set`**, **`mapping remove`**, **`mapping enable`**, **`mapping disable`**, **`mapping report`**, **`compare table`**, **`compare all`**, **`sync dry-run`**, **`sync review`**, **`sync approve`**, **`sync deny`**, **`sync approve-all`**, **`sync deny-all`**, **`sync apply`**, **`report changes`**, **`report validation`**, **`report summary`**, and **`version`** are implemented; other commands are stubs.
 
 ---
 
@@ -277,13 +277,25 @@ airtable-sync --json csv validate
 | `mapping disable` | Disable field synchronization |
 | `mapping report` | Generate mapping report |
 
+#### `mapping auto`
+
+Auto-maps CSV columns to Airtable fields by name (case/whitespace-insensitive) for every sync-enabled table. Resolves each table's CSV file from its `primary_key_field` (an existing mapping, or an unambiguous name match), then matches remaining non-computed, unmapped fields against that file's columns — a match maps the field and enables sync on it. Never overwrites a field you've already mapped by hand. Fields with no matching column are left unmapped; see `mapping report` for what's left.
+
+Requires prior `airtable pull-schema` and `csv import-headers`.
+
+```bash
+airtable-sync mapping auto
+airtable-sync --json mapping auto
+```
+
 #### `mapping list`
 
-Lists all non-computed Airtable fields for one table with mapping columns (`csv_field`, `csv_file`, `sync_enabled`). Read-only — requires a prior `airtable pull-schema`.
+Lists non-computed Airtable fields with mapping columns (`csv_field`, `csv_file`, `sync_enabled`) for one table, or every cached table when no table name is given. Read-only — requires a prior `airtable pull-schema`.
 
 ```bash
 airtable-sync mapping list building
 airtable-sync --json mapping list assets
+airtable-sync mapping list          # every table currently in the schema cache
 ```
 
 #### `mapping set`
